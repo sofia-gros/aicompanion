@@ -47,6 +47,8 @@ export function StartServices():Promise<void>;
 
 export function StopServices():Promise<void>;
 
+export function SwitchClassifierModel(arg1:string):Promise<void>;
+
 export function SwitchDisplayMode(arg1:string):Promise<void>;
 
 export function SwitchModel(arg1:string):Promise<void>;

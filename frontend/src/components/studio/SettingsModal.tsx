@@ -17,10 +17,61 @@ import {
   Sliders,
   Download,
 } from 'lucide-react';
-import { useAppStore } from '../../stores/useAppStore';
+import { useAppStore, getLightestModel } from '../../stores/useAppStore';
 import { WailsBridge } from '../../services/wailsBridge';
 
 type SettingsSection = 'web_search' | 'models' | 'voice_avatar' | 'storage' | 'security_about';
+
+interface ProviderPreset {
+  id: 'gemini' | 'openai' | 'groq' | 'custom';
+  name: string;
+  baseUrl: string;
+  defaultModel: string;
+  models: { id: string; name: string; desc: string }[];
+}
+
+const PROVIDER_PRESETS: ProviderPreset[] = [
+  {
+    id: 'gemini',
+    name: 'Google Gemini (推奨・超高速)',
+    baseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    defaultModel: 'gemini-2.0-flash',
+    models: [
+      { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash (最新・超高速・推奨)', desc: 'ミリ秒単位の即時応答' },
+      { id: 'gemini-1.5-flash', name: 'Gemini 1.5 Flash (高速・長文脈)', desc: '100万トークン対応' },
+      { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro (高知能・高精度)', desc: '深い論理思考力' },
+    ],
+  },
+  {
+    id: 'openai',
+    name: 'OpenAI (ChatGPT)',
+    baseUrl: 'https://api.openai.com/v1/chat/completions',
+    defaultModel: 'gpt-4o-mini',
+    models: [
+      { id: 'gpt-4o-mini', name: 'GPT-4o mini (軽量・高速・推奨)', desc: '安価かつ高精度' },
+      { id: 'gpt-4o', name: 'GPT-4o (フラグシップ最新)', desc: '世界最高峰の総合推論' },
+      { id: 'o3-mini', name: 'o3-mini (推論・思考特化)', desc: '高度な推論特化型' },
+    ],
+  },
+  {
+    id: 'groq',
+    name: 'Groq (LPU爆速推論)',
+    baseUrl: 'https://api.groq.com/openai/v1/chat/completions',
+    defaultModel: 'llama-3.3-70b-versatile',
+    models: [
+      { id: 'llama-3.3-70b-versatile', name: 'Llama 3.3 70B Versatile', desc: '超高速70Bモデル' },
+      { id: 'llama-3.1-8b-instant', name: 'Llama 3.1 8B Instant', desc: '爆速リアルタイム対話' },
+      { id: 'gemma2-9b-it', name: 'Gemma 2 9B-IT', desc: 'Google高精度モデル' },
+    ],
+  },
+  {
+    id: 'custom',
+    name: 'OpenAI互換 (カスタム / 自前サーバー)',
+    baseUrl: 'https://api.openai.com/v1',
+    defaultModel: 'custom-model',
+    models: [],
+  },
+];
 
 /**
  * アプリケーション環境設定モーダルコンポーネント (左右2ペイン ツリー＋詳細設定画面)
@@ -37,6 +88,8 @@ export const SettingsModal: React.FC = () => {
     downloadedModels,
     activeModelFileName,
     switchActiveModel,
+    switchClassifierModel,
+    setIsDownloaderOpen,
     config,
     updateConfig,
     clearChatMessages,
@@ -69,9 +122,19 @@ export const SettingsModal: React.FC = () => {
     }
   };
 
-  const handleDownloadClassifierModel = () => {
-    WailsBridge.startModelDownload('smollm2_135m');
-    addLog('[設定] 判定用超小型LLM (SmolLM2-135M 90MB) のダウンロードを開始しました');
+  const currentProviderId = searchConfig.cloudProvider || 'gemini';
+  const currentProvider = PROVIDER_PRESETS.find((p) => p.id === currentProviderId) || PROVIDER_PRESETS[0];
+
+  const handleProviderChange = (providerId: 'gemini' | 'openai' | 'groq' | 'custom') => {
+    const preset = PROVIDER_PRESETS.find((p) => p.id === providerId);
+    if (preset) {
+      updateSearchConfig({
+        cloudProvider: providerId,
+        cloudApiBaseUrl: preset.baseUrl,
+        cloudApiModel: preset.defaultModel,
+      });
+      addLog(`[設定] APIプロバイダーを変更しました: ${preset.name}`);
+    }
   };
 
   return (
@@ -204,6 +267,126 @@ export const SettingsModal: React.FC = () => {
                   </label>
                 </div>
 
+                {/* 完全クラウドAPIモード（ローカル推論・判定スキップ）トグル */}
+                <div className="p-3.5 bg-gradient-to-r from-indigo-950/40 to-purple-950/30 rounded-xl border border-indigo-700/60 flex items-center justify-between">
+                  <div className="pr-4">
+                    <div className="flex items-center space-x-2">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="text-xs font-semibold text-white">完全クラウドAPIモード (ローカル推論完全バイパス)</span>
+                    </div>
+                    <p className="text-[11px] text-zinc-300 mt-1 leading-relaxed">
+                      ローカルLLMサーバーや判定LLMを一切動かさず、すべての対話を直接クラウドAPI経由で即座に実行します。PC負荷ゼロで低スペックPCやノートPCに最適です。
+                    </p>
+                  </div>
+                  <label className="relative inline-flex items-center cursor-pointer shrink-0">
+                    <input
+                      type="checkbox"
+                      checked={Boolean(searchConfig.directCloudMode)}
+                      onChange={(e) => updateSearchConfig({ directCloudMode: e.target.checked })}
+                      className="sr-only peer"
+                    />
+                    <div className="w-11 h-6 bg-zinc-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-zinc-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                  </label>
+                </div>
+
+                {/* クラウドAPIプロバイダー設定 & モデルセレクト */}
+                <div className="p-3.5 bg-zinc-950/40 rounded-xl border border-zinc-800 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <Key className="w-3.5 h-3.5 text-indigo-400" />
+                      <span className="text-xs font-semibold text-zinc-200">クラウドAIプロバイダー設定</span>
+                    </div>
+                    <span className="text-[10px] px-2 py-0.5 bg-indigo-950 text-indigo-300 rounded border border-indigo-800">
+                      OpenAPI / Gemini 互換
+                    </span>
+                  </div>
+
+                  {/* プロバイダー選択ドロップダウン */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-zinc-400 mb-1">サービス提供元 (プロバイダー)</label>
+                    <select
+                      value={currentProviderId}
+                      onChange={(e) => handleProviderChange(e.target.value as 'gemini' | 'openai' | 'groq' | 'custom')}
+                      className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-indigo-500"
+                    >
+                      {PROVIDER_PRESETS.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {/* APIキー入力 */}
+                  <div>
+                    <label className="block text-[11px] font-medium text-zinc-400 mb-1">
+                      {currentProvider.id === 'gemini'
+                        ? 'Google Gemini API Key'
+                        : currentProvider.id === 'openai'
+                        ? 'OpenAI API Key (sk-...)'
+                        : currentProvider.id === 'groq'
+                        ? 'Groq API Key (gsk_...)'
+                        : 'API Key'}
+                    </label>
+                    <input
+                      type="password"
+                      value={searchConfig.cloudApiKey}
+                      onChange={(e) => updateSearchConfig({ cloudApiKey: e.target.value })}
+                      placeholder={
+                        currentProvider.id === 'gemini'
+                          ? 'AIzaSy...'
+                          : currentProvider.id === 'openai'
+                          ? 'sk-...'
+                          : currentProvider.id === 'groq'
+                          ? 'gsk_...'
+                          : 'APIキーを入力'
+                      }
+                      className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-indigo-500 font-mono"
+                    />
+                  </div>
+
+                  {/* モデル選択 (プリセットがある場合はセレクトボックス、カスタムの場合は手入力) */}
+                  {currentProvider.models.length > 0 ? (
+                    <div>
+                      <label className="block text-[11px] font-medium text-zinc-400 mb-1">使用モデル (セレクト選択)</label>
+                      <select
+                        value={searchConfig.cloudApiModel || currentProvider.defaultModel}
+                        onChange={(e) => updateSearchConfig({ cloudApiModel: e.target.value })}
+                        className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-indigo-500 font-mono"
+                      >
+                        {currentProvider.models.map((m) => (
+                          <option key={m.id} value={m.id}>
+                            {m.name} - {m.desc}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[11px] font-medium text-zinc-400 mb-1">Base URL (エンドポイント)</label>
+                        <input
+                          type="text"
+                          value={searchConfig.cloudApiBaseUrl}
+                          onChange={(e) => updateSearchConfig({ cloudApiBaseUrl: e.target.value })}
+                          placeholder="https://api.openai.com/v1"
+                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-medium text-zinc-400 mb-1">Model 名</label>
+                        <input
+                          type="text"
+                          value={searchConfig.cloudApiModel}
+                          onChange={(e) => updateSearchConfig({ cloudApiModel: e.target.value })}
+                          placeholder="カスタムモデル名"
+                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-indigo-500 font-mono"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {/* レベル解説カード */}
                 <div className="p-3.5 bg-zinc-950/40 rounded-xl border border-zinc-800 space-y-2.5">
                   <div className="flex items-center space-x-1.5 text-xs font-semibold text-zinc-300">
@@ -226,53 +409,6 @@ export const SettingsModal: React.FC = () => {
                     <div className="p-2 bg-zinc-900/80 rounded-lg border border-zinc-800/80">
                       <div className="font-semibold text-amber-400">Level 3: スクレイピング</div>
                       <div className="text-zinc-400 mt-0.5">キー未登録時や失敗時の最終手段。DuckDuckGo+goquery。</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* OpenAPI形式 APIキー */}
-                <div className="p-3.5 bg-zinc-950/40 rounded-xl border border-zinc-800 space-y-2.5">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center space-x-2">
-                      <Key className="w-3.5 h-3.5 text-indigo-400" />
-                      <span className="text-xs font-semibold text-zinc-200">OpenAPI形式 APIキー (最優先)</span>
-                    </div>
-                    <span className="text-[10px] px-2 py-0.5 bg-indigo-950 text-indigo-300 rounded border border-indigo-800">
-                      Google / OpenAI / Groq 互換
-                    </span>
-                  </div>
-                  <div className="space-y-2 pt-1">
-                    <div>
-                      <label className="block text-[11px] font-medium text-zinc-400 mb-1">API Key</label>
-                      <input
-                        type="password"
-                        value={searchConfig.cloudApiKey}
-                        onChange={(e) => updateSearchConfig({ cloudApiKey: e.target.value })}
-                        placeholder="sk-..."
-                        className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-indigo-500 font-mono"
-                      />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div>
-                        <label className="block text-[11px] font-medium text-zinc-400 mb-1">Base URL</label>
-                        <input
-                          type="text"
-                          value={searchConfig.cloudApiBaseUrl}
-                          onChange={(e) => updateSearchConfig({ cloudApiBaseUrl: e.target.value })}
-                          placeholder="https://api.openai.com/v1"
-                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-indigo-500 font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-medium text-zinc-400 mb-1">Model 名</label>
-                        <input
-                          type="text"
-                          value={searchConfig.cloudApiModel}
-                          onChange={(e) => updateSearchConfig({ cloudApiModel: e.target.value })}
-                          placeholder="gpt-4o-mini / gemini-2.0-flash"
-                          className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-indigo-500 font-mono"
-                        />
-                      </div>
                     </div>
                   </div>
                 </div>
@@ -389,32 +525,63 @@ export const SettingsModal: React.FC = () => {
                   </div>
                 </div>
 
-                {/* 判定用超小型モデルの指定 & 入手ボタン */}
+                {/* 判定用超小型モデルの必須選択 (ダウンロード済みモデルから選択) */}
                 <div className="p-3.5 bg-zinc-950/40 rounded-xl border border-zinc-800 space-y-3">
                   <div className="flex items-center justify-between">
                     <div>
-                      <div className="text-xs font-semibold text-zinc-200">判定用超小型モデル</div>
-                      <div className="text-[11px] text-zinc-400">
-                        大規模LLMに負荷をかけず、超小型モデル（SmolLM2-135M / Qwen2.5-0.5B）で瞬時に判定します
+                      <div className="flex items-center space-x-2">
+                        <span className="text-xs font-semibold text-zinc-200">判定用LLMモデル (必須選択)</span>
+                        <span className="text-[10px] px-2 py-0.2 bg-amber-950 text-amber-300 rounded border border-amber-800 font-medium">
+                          ポート 8085 独立稼働
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-zinc-400 mt-0.5">
+                        会話用LLMとは独立してポート8085で稼働し、発話意図を数十ミリ秒で判定します
                       </div>
                     </div>
                     <button
-                      onClick={handleDownloadClassifierModel}
-                      className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg text-xs font-medium transition-colors flex items-center space-x-1.5 shrink-0"
-                      title="SmolLM2-135M (約90MB) をダウンロード"
+                      onClick={() => setIsDownloaderOpen(true)}
+                      className="px-3 py-1.5 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded-lg text-xs font-medium transition-colors flex items-center space-x-1.5 shrink-0 border border-zinc-700"
+                      title="モデルダウンロード画面を開く"
                     >
-                      <Download className="w-3.5 h-3.5" />
-                      <span>判定用小型LLMを入手 (90MB)</span>
+                      <Download className="w-3.5 h-3.5 text-indigo-400" />
+                      <span>モデルダウンロード</span>
                     </button>
                   </div>
 
-                  <input
-                    type="text"
-                    value={searchConfig.classifierModel}
-                    onChange={(e) => updateSearchConfig({ classifierModel: e.target.value })}
-                    placeholder="qwen2.5-0.5b-instruct-q4_k_m.gguf / smollm2-135m-instruct-q4_k_m.gguf"
-                    className="w-full px-3 py-1.5 bg-zinc-900 border border-zinc-700/80 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-indigo-500 font-mono"
-                  />
+                  {downloadedModels.length > 0 ? (
+                    <div>
+                      <label className="block text-[11px] font-medium text-zinc-400 mb-1">
+                        選択された判定モデル (ダウンロード済み中から最軽量を初期選択)
+                      </label>
+                      <select
+                        value={searchConfig.classifierModel || getLightestModel(downloadedModels)}
+                        onChange={(e) => switchClassifierModel(e.target.value)}
+                        className="w-full px-3 py-2 bg-zinc-900 border border-zinc-700 rounded-lg text-xs text-zinc-100 focus:outline-none focus:border-indigo-500 font-mono"
+                      >
+                        {downloadedModels.map((m) => {
+                          const isLightest = m === getLightestModel(downloadedModels);
+                          return (
+                            <option key={m} value={m}>
+                              {m} {isLightest ? '[最軽量・推奨]' : ''}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </div>
+                  ) : (
+                    <div className="p-3 rounded-lg bg-amber-950/30 border border-amber-800/60 flex items-center justify-between">
+                      <div className="text-xs text-amber-200">
+                        判定用モデルが未取得です。モデルダウンロードから軽量モデル（SmolLM2 135M / 90MB等）を取得してください。
+                      </div>
+                      <button
+                        onClick={() => setIsDownloaderOpen(true)}
+                        className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white rounded text-xs font-semibold shrink-0 ml-3"
+                      >
+                        今すぐ取得
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
             )}

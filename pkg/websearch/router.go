@@ -1,34 +1,80 @@
 package websearch
 
 import (
+	"bytes"
 	"context"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"regexp"
 	"strings"
+	"time"
 )
 
 // Router はユーザー発話の解決レベル（Level 0〜3）を判定し、最適なエンジンへ振り分ける階層型情報ルーターです。
 type Router struct {
-	analyzer  *Analyzer
-	wikipedia *WikipediaClient
-	weather   *WeatherClient
-	tavily    *TavilyClient
-	cloudLLM  *CloudLLMClient
-	searcher  *Searcher
-	scraper   *Scraper
+	analyzer   *Analyzer
+	wikipedia  *WikipediaClient
+	weather    *WeatherClient
+	tavily     *TavilyClient
+	cloudLLM   *CloudLLMClient
+	searcher   *Searcher
+	scraper    *Scraper
+	httpClient *http.Client
 }
 
 // NewRouter は新しい階層型情報ルーターインスタンスを初期化します。
 func NewRouter() *Router {
 	return &Router{
-		analyzer:  NewAnalyzer(),
-		wikipedia: NewWikipediaClient(),
-		weather:   NewWeatherClient(),
-		tavily:    NewTavilyClient(),
-		cloudLLM:  NewCloudLLMClient(),
-		searcher:  NewSearcher(),
-		scraper:   NewScraper(),
+		analyzer:   NewAnalyzer(),
+		wikipedia:  NewWikipediaClient(),
+		weather:    NewWeatherClient(),
+		tavily:     NewTavilyClient(),
+		cloudLLM:   NewCloudLLMClient(),
+		searcher:   NewSearcher(),
+		scraper:    NewScraper(),
+		httpClient: &http.Client{Timeout: 3 * time.Second},
 	}
+}
+
+// queryLocalClassifier は独立ポート(8085)で待機中の超小型LLMサーバーにプロンプトを送信し、判定結果を即時取得します。
+func (r *Router) queryLocalClassifier(ctx context.Context, endpoint string, prompt string) (string, error) {
+	if endpoint == "" {
+		endpoint = "http://127.0.0.1:8085/completion"
+	}
+	reqData := map[string]interface{}{
+		"prompt":      prompt,
+		"temperature": 0.1,
+		"n_predict":   5,
+		"stream":      false,
+	}
+	b, err := json.Marshal(reqData)
+	if err != nil {
+		return "", err
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(b))
+	if err != nil {
+		return "", err
+	}
+	req.Header.Set("Content-Type", "application/json")
+
+	resp, err := r.httpClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return "", fmt.Errorf("HTTPステータス異常: %d", resp.StatusCode)
+	}
+
+	var res struct {
+		Content string `json:"content"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(res.Content), nil
 }
 
 // DetermineLevel はユーザー入力から情報解決レベル（Level 0〜3）と検索クエリを判定します。
@@ -105,7 +151,7 @@ func (r *Router) DetermineIntent(ctx context.Context, cfg SearchConfig, userInpu
 		logger = func(stage string, msg string) {}
 	}
 
-	// 超小型LLM判定モードが選択されており、モデル名が指定されている場合
+	// 超小型LLM判定モードが選択されている場合
 	if cfg.ClassifierMode == "llm" {
 		logger("思考", fmt.Sprintf("超小型LLM (%s) による発話レベルの文脈判定を実行中...", cfg.ClassifierModel))
 		prompt := fmt.Sprintf(
@@ -119,41 +165,49 @@ func (r *Router) DetermineIntent(ctx context.Context, cfg SearchConfig, userInpu
 			userInput,
 		)
 
-		// ローカル推論サーバーまたはOpenAPI経由で超小型推論
-		if cfg.CloudAPIKey != "" {
-			answer, err := r.cloudLLM.Query(ctx, cfg.CloudAPIKey, cfg.CloudAPIBaseURL, cfg.CloudAPIModel, prompt)
-			if err == nil {
-				answer = strings.TrimSpace(answer)
-				if strings.Contains(answer, "1") {
-					return SearchIntent{
-						Level:       Level1FreeSearch,
-						Query:       r.analyzer.extractSearchQuery(userInput),
-						Reason:      "超小型LLMによる文脈判定: 用語・確定事実 (Level 1)",
-						FillerReply: "ちょっと調べてみるね！",
-					}
-				} else if strings.Contains(answer, "2") {
-					return SearchIntent{
-						Level:       Level2CloudAPI,
-						Query:       r.analyzer.extractSearchQuery(userInput),
-						Reason:      "超小型LLMによる文脈判定: 最新時事・Web検索 (Level 2)",
-						FillerReply: "最新の情報をネットで検索してみるよ〜！",
-					}
-				} else if strings.Contains(answer, "3") {
-					return SearchIntent{
-						Level:       Level3Scraping,
-						Query:       r.analyzer.extractSearchQuery(userInput),
-						Reason:      "超小型LLMによる文脈判定: スクレイピング (Level 3)",
-						FillerReply: "対象のページを直接確認してみるね！",
-					}
-				} else if strings.Contains(answer, "0") {
-					return SearchIntent{
-						Level:  Level0LLMOnly,
-						Reason: "超小型LLMによる文脈判定: 日常対話 (Level 0)",
-					}
+		var answer string
+		var queryErr error
+
+		// 1. ローカル判定用サーバー（ポート8085）へ高速問い合わせ
+		answer, queryErr = r.queryLocalClassifier(ctx, cfg.ClassifierEndpoint, prompt)
+
+		// 2. ローカル未起動時はクラウドAPIへフォールバック
+		if queryErr != nil && cfg.CloudAPIKey != "" {
+			answer, queryErr = r.cloudLLM.Query(ctx, cfg.CloudAPIKey, cfg.CloudAPIBaseURL, cfg.CloudAPIModel, prompt)
+		}
+
+		if queryErr == nil {
+			answer = strings.TrimSpace(answer)
+			if strings.Contains(answer, "1") {
+				return SearchIntent{
+					Level:       Level1FreeSearch,
+					Query:       r.analyzer.extractSearchQuery(userInput),
+					Reason:      "超小型LLMによる文脈判定: 用語・確定事実 (Level 1)",
+					FillerReply: "ちょっと調べてみるね！",
+				}
+			} else if strings.Contains(answer, "2") {
+				return SearchIntent{
+					Level:       Level2CloudAPI,
+					Query:       r.analyzer.extractSearchQuery(userInput),
+					Reason:      "超小型LLMによる文脈判定: 最新時事・Web検索 (Level 2)",
+					FillerReply: "最新の情報をネットで検索してみるよ〜！",
+				}
+			} else if strings.Contains(answer, "3") {
+				return SearchIntent{
+					Level:       Level3Scraping,
+					Query:       r.analyzer.extractSearchQuery(userInput),
+					Reason:      "超小型LLMによる文脈判定: スクレイピング (Level 3)",
+					FillerReply: "対象のページを直接確認してみるね！",
+				}
+			} else if strings.Contains(answer, "0") {
+				return SearchIntent{
+					Level:  Level0LLMOnly,
+					Reason: "超小型LLMによる文脈判定: 日常対話 (Level 0)",
 				}
 			}
 		}
-		logger("思考", "超小型LLM判定がタイムアウトまたは未起動のため、高速正規表現ルールへフォールバックします")
+
+		logger("思考", "超小型LLM判定が未起動のため、高速正規表現ルールへフォールバックします")
 	}
 
 	// デフォルト: 超高速正規表現ルール判定

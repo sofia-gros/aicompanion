@@ -86,6 +86,10 @@ export function StopServices() {
   return window['go']['main']['App']['StopServices']();
 }
 
+export function SwitchClassifierModel(arg1) {
+  return window['go']['main']['App']['SwitchClassifierModel'](arg1);
+}
+
 export function SwitchDisplayMode(arg1) {
   return window['go']['main']['App']['SwitchDisplayMode'](arg1);
 }

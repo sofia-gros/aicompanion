@@ -37,6 +37,8 @@ type SystemConfig struct {
 
 	// Web検索・外部API連携設定
 	WebSearchEnabled bool   `json:"webSearchEnabled"` // Web検索機能の有効/無効
+	DirectCloudMode  bool   `json:"directCloudMode"`  // 完全クラウドAPIモード（ローカル推論・レベル判定スキップ）
+	CloudProvider    string `json:"cloudProvider"`    // クラウドプロバイダー ("gemini", "openai", "groq", "custom")
 	TavilyAPIKey     string `json:"tavilyApiKey"`     // Tavily AI APIキー
 	CloudAPIKey      string `json:"cloudApiKey"`      // OpenAI互換 / Gemini APIキー
 	CloudAPIBaseURL  string `json:"cloudApiBaseUrl"`  // Base URL
@@ -118,6 +120,7 @@ func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
 	_ = a.httpServer.Start()
 	go a.ensureLLMServer()
+	go a.ensureClassifierServerWithModel(a.config.ClassifierModel)
 }
 // GetSystemSpec は現在のPCスペックと推奨LLMモデル情報を取得します。
 func (a *App) GetSystemSpec() platform.SystemSpec {
@@ -311,6 +314,107 @@ func (a *App) ensureLLMServerWithModel(specifiedModel string) {
 	emitLog("[LLM] 推論サーバーのヘルスチェックがタイムアウトしました (ポート 8080)")
 }
 
+// ensureClassifierServerWithModel は検索レベル判定専用の超小型LLMサーバーをポート8085で独立起動します。
+func (a *App) ensureClassifierServerWithModel(specifiedModel string) {
+	a.mutex.RLock()
+	targetDir := a.modelDir
+	if targetDir == "" {
+		targetDir = "models"
+	}
+	a.mutex.RUnlock()
+
+	serverPath := findAssetPath("bin", "llama-server.exe")
+	var modelPath string
+
+	if specifiedModel != "" {
+		cand := filepath.Join(targetDir, specifiedModel)
+		if _, err := os.Stat(cand); err == nil {
+			modelPath = cand
+		} else {
+			cand2 := findAssetPath("models", specifiedModel)
+			if _, err := os.Stat(cand2); err == nil {
+				modelPath = cand2
+			}
+		}
+	}
+
+	// 指定がなければtargetDir内のsmollm2または軽量モデルを優先探索
+	if modelPath == "" {
+		if entries, err := os.ReadDir(targetDir); err == nil {
+			for _, e := range entries {
+				name := strings.ToLower(e.Name())
+				if !e.IsDir() && strings.HasSuffix(name, ".gguf") && (strings.Contains(name, "smollm") || strings.Contains(name, "0.5b") || strings.Contains(name, "135m")) {
+					modelPath = filepath.Join(targetDir, e.Name())
+					break
+				}
+			}
+		}
+	}
+
+	if modelPath == "" || serverPath == "" {
+		return
+	}
+
+	if abs, err := filepath.Abs(modelPath); err == nil {
+		modelPath = abs
+	}
+	if abs, err := filepath.Abs(serverPath); err == nil {
+		serverPath = abs
+	}
+
+	emitLog := func(msg string) {
+		if a.ctx != nil {
+			runtime.EventsEmit(a.ctx, "system-log", msg)
+		}
+	}
+
+	emitLog(fmt.Sprintf("[判定LLM] 検索レベル判定用超小型サーバーを起動中... (モデル: %s, ポート: 8085)", filepath.Base(modelPath)))
+
+	args := []string{
+		"-m", modelPath,
+		"--host", "127.0.0.1",
+		"--port", "8085",
+		"-c", "2048",
+		"-ngl", "99",
+		"--keep", "-1",
+	}
+
+	// 独立したプロセス名 "llama-classifier" とポート 8085 で起動
+	if err := a.procManager.StartProcess("llama-classifier", serverPath, args, "http://127.0.0.1:8085"); err != nil {
+		emitLog(fmt.Sprintf("[判定LLM] 判定用プロセス起動失敗: %v", err))
+		return
+	}
+
+	// ヘルスチェック (最大15秒)
+	client := &http.Client{Timeout: 1 * time.Second}
+	for i := 0; i < 15; i++ {
+		time.Sleep(1 * time.Second)
+		resp, err := client.Get("http://127.0.0.1:8085/health")
+		if err == nil && resp.StatusCode == http.StatusOK {
+			_ = resp.Body.Close()
+			emitLog(fmt.Sprintf("[判定LLM] 判定用推論サーバー稼働開始 (モデル: %s, ポート: 8085)", filepath.Base(modelPath)))
+			return
+		}
+		if resp != nil {
+			_ = resp.Body.Close()
+		}
+	}
+}
+
+// SwitchClassifierModel は検索レベル判定用小型LLMを切り替え、独立推論サーバー(8085)を再起動します。
+func (a *App) SwitchClassifierModel(modelFileName string) error {
+	a.mutex.Lock()
+	a.config.ClassifierModel = modelFileName
+	a.mutex.Unlock()
+
+	if a.procManager != nil {
+		_ = a.procManager.StopProcess("llama-classifier")
+	}
+
+	go a.ensureClassifierServerWithModel(modelFileName)
+	return nil
+}
+
 // shutdown はWails終了時に呼び出され、外部プロセスとリソースを安全にクローズします。
 func (a *App) shutdown(ctx context.Context) {
 	if a.procManager != nil {
@@ -328,11 +432,16 @@ func (a *App) shutdown(ctx context.Context) {
 func (a *App) SendMessage(text string) error {
 	a.mutex.RLock()
 	searchCfg := websearch.SearchConfig{
-		Enabled:         a.config.WebSearchEnabled,
-		TavilyAPIKey:    a.config.TavilyAPIKey,
-		CloudAPIKey:     a.config.CloudAPIKey,
-		CloudAPIBaseURL: a.config.CloudAPIBaseURL,
-		CloudAPIModel:   a.config.CloudAPIModel,
+		Enabled:            a.config.WebSearchEnabled,
+		DirectCloudMode:    a.config.DirectCloudMode,
+		CloudProvider:      a.config.CloudProvider,
+		TavilyAPIKey:       a.config.TavilyAPIKey,
+		CloudAPIKey:        a.config.CloudAPIKey,
+		CloudAPIBaseURL:    a.config.CloudAPIBaseURL,
+		CloudAPIModel:      a.config.CloudAPIModel,
+		ClassifierMode:     a.config.ClassifierMode,
+		ClassifierModel:    a.config.ClassifierModel,
+		ClassifierEndpoint: "http://127.0.0.1:8085/completion",
 	}
 	a.mutex.RUnlock()
 
@@ -359,6 +468,40 @@ func (a *App) SendMessage(text string) error {
 			if a.ctx != nil {
 				runtime.EventsEmit(a.ctx, "system-log", fmt.Sprintf("[%s] %s", stage, message))
 			}
+		}
+
+		// 完全クラウドAPIモードが有効な場合: レベル判定やローカルサーバーを完全スキップして直接ストリーミング対話
+		if searchCfg.DirectCloudMode && searchCfg.CloudAPIKey != "" {
+			providerName := searchCfg.CloudProvider
+			if providerName == "" {
+				providerName = "Cloud API"
+			}
+			logger("クラウド直接対話", fmt.Sprintf("完全クラウドモード稼働中 (%s: %s)。レベル判定とローカル推論をスキップして直接対話を開始します", providerName, searchCfg.CloudAPIModel))
+			prompt := a.promptBuild.BuildPromptWithContext(longMemories, history, "", text)
+
+			var fullReply string
+			_ = a.pipeline.ProcessUserInputDirectCloud(
+				context.Background(),
+				searchCfg.CloudAPIKey,
+				searchCfg.CloudAPIBaseURL,
+				searchCfg.CloudAPIModel,
+				prompt,
+				func(t pipeline.LLMTokenEvent) {
+					fullReply += t.Token
+					runtime.EventsEmit(a.ctx, "llm-token", t)
+				},
+				func(s pipeline.AvatarSpeakEvent) {
+					runtime.EventsEmit(a.ctx, "avatar-speak", s)
+					_ = a.httpServer.Hub().BroadcastAvatarEvent("avatar-speak", s)
+				},
+			)
+
+			if a.memStore != nil && fullReply != "" {
+				_ = a.memStore.AddLog("default", "assistant", fullReply)
+				worker := memory.NewMemoryWorker(a.memStore)
+				worker.RecordTurn(text, fullReply)
+			}
+			return
 		}
 
 		var webContext string
@@ -439,28 +582,38 @@ func (a *App) GetSearchConfig() websearch.SearchConfig {
 	a.mutex.RLock()
 	defer a.mutex.RUnlock()
 	return websearch.SearchConfig{
-		Enabled:         a.config.WebSearchEnabled,
-		TavilyAPIKey:    a.config.TavilyAPIKey,
-		CloudAPIKey:     a.config.CloudAPIKey,
-		CloudAPIBaseURL: a.config.CloudAPIBaseURL,
-		CloudAPIModel:   a.config.CloudAPIModel,
-		ClassifierMode:  a.config.ClassifierMode,
-		ClassifierModel: a.config.ClassifierModel,
+		Enabled:            a.config.WebSearchEnabled,
+		DirectCloudMode:    a.config.DirectCloudMode,
+		CloudProvider:      a.config.CloudProvider,
+		TavilyAPIKey:       a.config.TavilyAPIKey,
+		CloudAPIKey:        a.config.CloudAPIKey,
+		CloudAPIBaseURL:    a.config.CloudAPIBaseURL,
+		CloudAPIModel:      a.config.CloudAPIModel,
+		ClassifierMode:     a.config.ClassifierMode,
+		ClassifierModel:    a.config.ClassifierModel,
+		ClassifierEndpoint: "http://127.0.0.1:8085/completion",
 	}
 }
 
 // SaveSearchConfig はWeb検索および外部API設定を保存・更新します。
 func (a *App) SaveSearchConfig(cfg websearch.SearchConfig) error {
 	a.mutex.Lock()
-	defer a.mutex.Unlock()
-
+	oldClassifierModel := a.config.ClassifierModel
 	a.config.WebSearchEnabled = cfg.Enabled
+	a.config.DirectCloudMode = cfg.DirectCloudMode
+	a.config.CloudProvider = cfg.CloudProvider
 	a.config.TavilyAPIKey = cfg.TavilyAPIKey
 	a.config.CloudAPIKey = cfg.CloudAPIKey
 	a.config.CloudAPIBaseURL = cfg.CloudAPIBaseURL
 	a.config.CloudAPIModel = cfg.CloudAPIModel
 	a.config.ClassifierMode = cfg.ClassifierMode
 	a.config.ClassifierModel = cfg.ClassifierModel
+	a.mutex.Unlock()
+
+	// 判定用モデルが変更された場合、独立判定サーバー(8085)を自動再起動
+	if cfg.ClassifierMode == "llm" && cfg.ClassifierModel != "" && cfg.ClassifierModel != oldClassifierModel {
+		_ = a.SwitchClassifierModel(cfg.ClassifierModel)
+	}
 
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "system-log", "[設定] Web検索・API設定を更新しました")

@@ -83,6 +83,10 @@ export interface SystemConfig {
 export interface SearchConfig {
   /** Web情報解決機能の有効/無効 */
   enabled: boolean;
+  /** 完全クラウドAPIモード（ローカル推論・レベル判定をスキップして直接対話） */
+  directCloudMode?: boolean;
+  /** クラウドプロバイダー種別 ('gemini' | 'openai' | 'groq' | 'custom') */
+  cloudProvider?: 'gemini' | 'openai' | 'groq' | 'custom';
   /** Tavily AI APIキー */
   tavilyApiKey: string;
   /** OpenAPI形式 / Google Gemini / OpenAI 互換APIキー */
@@ -95,6 +99,8 @@ export interface SearchConfig {
   classifierMode: 'regex' | 'llm';
   /** 判定用超小型モデル名 */
   classifierModel: string;
+  /** 判定用LLMサーバーエンドポイント (例: http://127.0.0.1:8085/completion) */
+  classifierEndpoint?: string;
 }
 
 /**

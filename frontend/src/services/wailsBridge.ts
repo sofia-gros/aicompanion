@@ -257,6 +257,15 @@ export class WailsBridge {
   }
 
   /**
+   * 検索レベル判定専用の超小型LLMモデルを切り替え、独立サーバー(8085)を起動します。
+   */
+  public static async switchClassifierModel(modelFileName: string): Promise<void> {
+    if (this.isWails() && (window.go?.main?.App as any)?.SwitchClassifierModel) {
+      await (window.go?.main?.App as any).SwitchClassifierModel(modelFileName);
+    }
+  }
+
+  /**
    * Web検索・情報解決設定を取得します。
    */
   public static async getSearchConfig(): Promise<SearchConfig> {

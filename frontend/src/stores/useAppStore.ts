@@ -77,6 +77,7 @@ interface AppState {
   setServicesRunning: (running: boolean) => void;
   setDownloadedModels: (models: string[]) => void;
   switchActiveModel: (fileName: string) => void;
+  switchClassifierModel: (fileName: string) => void;
   setSystemSpec: (spec: SystemSpec) => void;
   setSystemUsage: (usage: SystemUsage) => void;
   setFps: (fps: number) => void;
@@ -108,6 +109,25 @@ interface AppState {
   addChatMessage: (msg: ChatMessage) => void;
   clearChatMessages: () => void;
 }
+
+/**
+ * ダウンロード済みモデル一覧の中からファイルサイズが最も小さいモデルを優先選定します。
+ */
+export const getLightestModel = (models: string[]): string => {
+  if (!models || models.length === 0) return '';
+  const score = (name: string): number => {
+    const l = name.toLowerCase();
+    if (l.includes('135m') || l.includes('smollm')) return 1;
+    if (l.includes('0.5b')) return 2;
+    if (l.includes('1b')) return 3;
+    if (l.includes('1.5b')) return 4;
+    if (l.includes('2b')) return 5;
+    if (l.includes('3b') || l.includes('mini')) return 6;
+    if (l.includes('7b') || l.includes('8b')) return 7;
+    return 10;
+  };
+  return [...models].sort((a, b) => score(a) - score(b))[0];
+};
 
 /**
  * Zustand によるグローバルストア実装
@@ -147,12 +167,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   searchConfig: {
     enabled: true,
+    directCloudMode: false,
+    cloudProvider: 'gemini',
     tavilyApiKey: '',
     cloudApiKey: '',
-    cloudApiBaseUrl: 'https://api.openai.com/v1',
-    cloudApiModel: 'gpt-4o-mini',
-    classifierMode: 'regex',
-    classifierModel: 'qwen2.5-0.5b-instruct-q4_k_m.gguf',
+    cloudApiBaseUrl: 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+    cloudApiModel: 'gemini-2.0-flash',
+    classifierMode: 'llm',
+    classifierModel: 'smollm2-135m-instruct-q4_k_m.gguf',
+    classifierEndpoint: 'http://127.0.0.1:8085/completion',
   },
 
   downloadProgress: null,
@@ -170,14 +193,37 @@ export const useAppStore = create<AppState>((set, get) => ({
   setServicesRunning: (running) => set({ isServicesRunning: running }),
   setDownloadedModels: (models) => {
     set({ downloadedModels: models });
-    if (models.length > 0 && !get().activeModelFileName) {
+    const s = get();
+    if (models.length > 0 && !s.activeModelFileName) {
       set({ activeModelFileName: models[0] });
+    }
+    // 判定用LLMが未設定またはリスト外の場合、ダウンロード済みの中で一番軽いモデルを必須初期選択
+    if (models.length > 0 && (!s.searchConfig.classifierModel || !models.includes(s.searchConfig.classifierModel))) {
+      const lightest = getLightestModel(models);
+      set({
+        searchConfig: {
+          ...s.searchConfig,
+          classifierModel: lightest,
+        },
+      });
+      WailsBridge.switchClassifierModel(lightest);
     }
   },
   switchActiveModel: (fileName) => {
     set({ activeModelFileName: fileName });
     WailsBridge.switchModel(fileName);
-    get().addLog(`[推論] モデルを切り替えました: ${fileName}`);
+    get().addLog(`[推論] 会話用モデルを切り替えました: ${fileName}`);
+  },
+  switchClassifierModel: (fileName) => {
+    const s = get();
+    set({
+      searchConfig: {
+        ...s.searchConfig,
+        classifierModel: fileName,
+      },
+    });
+    WailsBridge.switchClassifierModel(fileName);
+    get().addLog(`[判定] 検索レベル判定用モデルを切り替えました (8085): ${fileName}`);
   },
   setSystemUsage: (usage) => set({ systemUsage: usage }),
   setSystemSpec: (spec) => set({ systemSpec: spec }),

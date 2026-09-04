@@ -43,6 +43,8 @@ export namespace main {
 	    lipSyncSensitivity: number;
 	    eyeTrackingSensitivity: number;
 	    webSearchEnabled: boolean;
+	    directCloudMode: boolean;
+	    cloudProvider: string;
 	    tavilyApiKey: string;
 	    cloudApiKey: string;
 	    cloudApiBaseUrl: string;
@@ -65,6 +67,8 @@ export namespace main {
 	        this.lipSyncSensitivity = source["lipSyncSensitivity"];
 	        this.eyeTrackingSensitivity = source["eyeTrackingSensitivity"];
 	        this.webSearchEnabled = source["webSearchEnabled"];
+	        this.directCloudMode = source["directCloudMode"];
+	        this.cloudProvider = source["cloudProvider"];
 	        this.tavilyApiKey = source["tavilyApiKey"];
 	        this.cloudApiKey = source["cloudApiKey"];
 	        this.cloudApiBaseUrl = source["cloudApiBaseUrl"];
@@ -129,12 +133,15 @@ export namespace websearch {
 	
 	export class SearchConfig {
 	    enabled: boolean;
+	    directCloudMode: boolean;
+	    cloudProvider: string;
 	    tavilyApiKey: string;
 	    cloudApiKey: string;
 	    cloudApiBaseUrl: string;
 	    cloudApiModel: string;
 	    classifierMode: string;
 	    classifierModel: string;
+	    classifierEndpoint: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SearchConfig(source);
@@ -143,12 +150,15 @@ export namespace websearch {
 	    constructor(source: any = {}) {
 	        if ('string' === typeof source) source = JSON.parse(source);
 	        this.enabled = source["enabled"];
+	        this.directCloudMode = source["directCloudMode"];
+	        this.cloudProvider = source["cloudProvider"];
 	        this.tavilyApiKey = source["tavilyApiKey"];
 	        this.cloudApiKey = source["cloudApiKey"];
 	        this.cloudApiBaseUrl = source["cloudApiBaseUrl"];
 	        this.cloudApiModel = source["cloudApiModel"];
 	        this.classifierMode = source["classifierMode"];
 	        this.classifierModel = source["classifierModel"];
+	        this.classifierEndpoint = source["classifierEndpoint"];
 	    }
 	}
 

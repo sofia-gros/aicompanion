@@ -17,13 +17,16 @@ const (
 
 // SearchConfig はWeb検索および外部APIの動作設定を保持する構造体です。
 type SearchConfig struct {
-	Enabled         bool   `json:"enabled"`         // Web情報解決機能の有効/無効
-	TavilyAPIKey    string `json:"tavilyApiKey"`    // Tavily AI APIキー
-	CloudAPIKey     string `json:"cloudApiKey"`     // OpenAI互換 / Google Gemini APIキー
-	CloudAPIBaseURL string `json:"cloudApiBaseUrl"` // API Base URL (例: https://api.openai.com/v1)
-	CloudAPIModel   string `json:"cloudApiModel"`   // 使用モデル名 (例: gpt-4o-mini, gemini-2.0-flash)
-	ClassifierMode  string `json:"classifierMode"`  // レベル判定方式 ("regex": 高速正規表現, "llm": 超小型LLM推論)
-	ClassifierModel string `json:"classifierModel"` // 判定に使用する超小型モデル名 (例: qwen2.5-0.5b-instruct-q4_k_m.gguf)
+	Enabled            bool   `json:"enabled"`            // Web情報解決機能の有効/無効
+	DirectCloudMode    bool   `json:"directCloudMode"`    // ローカル推論・レベル判定をスキップし直接クラウドAPIで完結するモード
+	CloudProvider      string `json:"cloudProvider"`      // クラウドプロバイダー ("gemini", "openai", "groq", "custom")
+	TavilyAPIKey       string `json:"tavilyApiKey"`       // Tavily AI APIキー
+	CloudAPIKey        string `json:"cloudApiKey"`        // OpenAI互換 / Google Gemini APIキー
+	CloudAPIBaseURL    string `json:"cloudApiBaseUrl"`    // API Base URL (例: https://api.openai.com/v1)
+	CloudAPIModel      string `json:"cloudApiModel"`      // 使用モデル名 (例: gpt-4o-mini, gemini-2.0-flash)
+	ClassifierMode     string `json:"classifierMode"`     // レベル判定方式 ("regex": 高速正規表現, "llm": 超小型LLM推論)
+	ClassifierModel    string `json:"classifierModel"`    // 判定に使用する超小型モデル名 (例: smollm2-135m-instruct-q4_k_m.gguf)
+	ClassifierEndpoint string `json:"classifierEndpoint"` // 判定用LLMサーバーのエンドポイント (例: http://127.0.0.1:8085/completion)
 }
 
 // SearchResult は検索で得られた1件の情報を表します。

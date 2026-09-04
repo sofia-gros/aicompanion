@@ -10,15 +10,28 @@ import { Cpu, CheckCircle2, Download, FolderOpen, Tag, HardDrive } from 'lucide-
 export interface ExtendedModelItem {
   key: string;
   name: string;
-  brand: 'Google' | 'Meta' | 'Qwen' | 'Microsoft';
+  brand: 'Google' | 'Meta' | 'Qwen' | 'Microsoft' | 'HuggingFace';
   params: string;
   quant: string;
   size: string;
   desc: string;
   recommendedFor: string;
+  isClassifier?: boolean;
 }
 
 export const EXTENDED_AVAILABLE_MODELS: ExtendedModelItem[] = [
+  // 検索レベル・意図判定用 超小型クラス (135M / 90MB)
+  {
+    key: 'smollm2_135m',
+    name: 'SmolLM2 135M-Instruct',
+    brand: 'HuggingFace',
+    params: '135M',
+    quant: 'Q4_K_M',
+    size: '90 MB',
+    desc: '【高速判定用】検索レベルやユーザー意図を瞬時にミリ秒判定する超小型モデル（判定用サーバー用）',
+    recommendedFor: '全環境推奨・検索判定必須',
+    isClassifier: true,
+  },
   // 8GB 超軽量クラス (0.5B〜1.5B)
   {
     key: 'tier0_5b',
@@ -232,6 +245,8 @@ export const ModelDownloaderModal: React.FC<ModelDownloaderModalProps> = ({
                             ? 'bg-sky-950 text-sky-300 border border-sky-800/60'
                             : m.brand === 'Microsoft'
                             ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60'
+                            : m.brand === 'HuggingFace'
+                            ? 'bg-amber-950 text-amber-300 border border-amber-800/60'
                             : 'bg-purple-950 text-purple-300 border border-purple-800/60'
                         }`}
                       >
@@ -241,6 +256,11 @@ export const ModelDownloaderModal: React.FC<ModelDownloaderModalProps> = ({
                       <span className="text-[9px] px-1.5 py-0.2 rounded font-mono bg-zinc-800 text-zinc-300 border border-zinc-700">
                         {m.quant}
                       </span>
+                      {m.isClassifier && (
+                        <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-amber-600/30 text-amber-300 border border-amber-500/40">
+                          判定専用
+                        </span>
+                      )}
                       {isRecommended && (
                         <span className="text-[9px] px-1.5 py-0.2 rounded font-bold bg-indigo-600 text-white">
                           推奨

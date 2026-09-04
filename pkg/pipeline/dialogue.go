@@ -211,3 +211,158 @@ func (p *DialoguePipeline) ProcessUserInput(
 	wg.Wait()
 	return nil
 }
+
+// ProcessUserInputDirectCloud はローカル推論を行わず、直接クラウドAPI（Gemini/OpenAI等）のストリーミングエンドポイントへリクエストして対話と音声合成を実行します。
+func (p *DialoguePipeline) ProcessUserInputDirectCloud(
+	ctx context.Context,
+	apiKey string,
+	baseURL string,
+	model string,
+	prompt string,
+	onToken TokenCallback,
+	onSpeak DispatchCallback,
+) error {
+	p.mutex.RLock()
+	currentTTS := p.ttsProvider
+	p.mutex.RUnlock()
+
+	if baseURL == "" {
+		baseURL = "https://api.openai.com/v1/chat/completions"
+	}
+	if model == "" {
+		model = "gpt-4o-mini"
+	}
+
+	reqBody := map[string]interface{}{
+		"model": model,
+		"messages": []map[string]string{
+			{"role": "user", "content": prompt},
+		},
+		"stream":      true,
+		"temperature": 0.7,
+	}
+	jsonBytes, err := json.Marshal(reqBody)
+	if err != nil {
+		return fmt.Errorf("クラウドAPIリクエストJSON作成失敗: %w", err)
+	}
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL, bytes.NewReader(jsonBytes))
+	if err != nil {
+		return fmt.Errorf("クラウドAPIリクエスト生成失敗: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+	}
+
+	resp, err := p.httpClient.Do(req)
+	if err != nil || (resp != nil && resp.StatusCode >= 400) {
+		status := 0
+		if resp != nil {
+			status = resp.StatusCode
+			_ = resp.Body.Close()
+		}
+		infoText := fmt.Sprintf("クラウドAPI通信に失敗しました (ステータス: %d)。APIキーやネットワーク接続をご確認ください。", status)
+		for _, r := range infoText {
+			if onToken != nil {
+				onToken(LLMTokenEvent{Token: string(r), IsFirst: false})
+			}
+		}
+		res, synthErr := currentTTS.Synthesize(ctx, infoText, tts.TTSOptions{})
+		if synthErr == nil && onSpeak != nil {
+			onSpeak(AvatarSpeakEvent{
+				SeqID:       1,
+				IsLast:      true,
+				Text:        infoText,
+				AudioFormat: res.ContentType,
+				AudioBase64: base64.StdEncoding.EncodeToString(res.AudioData),
+				Emotion:     "neutral",
+				DurationMs:  res.DurationMs,
+			})
+		}
+		return nil
+	}
+	defer resp.Body.Close()
+
+	scanner := bufio.NewScanner(resp.Body)
+	isFirstToken := true
+	var seqCounter int32 = 0
+	splitter := NewSentenceSplitter()
+	var wg sync.WaitGroup
+
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if !strings.HasPrefix(line, "data: ") {
+			continue
+		}
+		dataStr := strings.TrimPrefix(line, "data: ")
+		if dataStr == "[DONE]" {
+			break
+		}
+
+		var dataObj struct {
+			Choices []struct {
+				Delta struct {
+					Content string `json:"content"`
+				} `json:"delta"`
+			} `json:"choices"`
+		}
+		if err := json.Unmarshal([]byte(dataStr), &dataObj); err != nil {
+			continue
+		}
+
+		var token string
+		if len(dataObj.Choices) > 0 {
+			token = dataObj.Choices[0].Delta.Content
+		}
+
+		if token != "" && onToken != nil {
+			onToken(LLMTokenEvent{Token: token, IsFirst: isFirstToken})
+			isFirstToken = false
+		}
+
+		sentences := splitter.Feed(token)
+		for _, sent := range sentences {
+			seq := atomic.AddInt32(&seqCounter, 1)
+			wg.Add(1)
+			go func(sText string, sSeq int) {
+				defer wg.Done()
+				res, err := currentTTS.Synthesize(ctx, sText, tts.TTSOptions{})
+				if err == nil && onSpeak != nil {
+					onSpeak(AvatarSpeakEvent{
+						SeqID:       sSeq,
+						IsLast:      false,
+						Text:        sText,
+						AudioFormat: res.ContentType,
+						AudioBase64: base64.StdEncoding.EncodeToString(res.AudioData),
+						Emotion:     "neutral",
+						DurationMs:  res.DurationMs,
+					})
+				}
+			}(sent, int(seq))
+		}
+	}
+
+	if remaining := splitter.Flush(); remaining != "" {
+		seq := atomic.AddInt32(&seqCounter, 1)
+		wg.Add(1)
+		go func(sText string, sSeq int) {
+			defer wg.Done()
+			res, err := currentTTS.Synthesize(ctx, sText, tts.TTSOptions{})
+			if err == nil && onSpeak != nil {
+				onSpeak(AvatarSpeakEvent{
+					SeqID:       sSeq,
+					IsLast:      true,
+					Text:        sText,
+					AudioFormat: res.ContentType,
+					AudioBase64: base64.StdEncoding.EncodeToString(res.AudioData),
+					Emotion:     "happy",
+					DurationMs:  res.DurationMs,
+				})
+			}
+		}(remaining, int(seq))
+	}
+
+	wg.Wait()
+	return nil
+}

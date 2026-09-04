@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -48,16 +49,17 @@ func (m *Manager) StartProcess(name string, exePath string, args []string, endpo
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
-	if existing, ok := m.processes[name]; ok && existing.Status == StatusRunning {
-		return fmt.Errorf("プロセス %s は既に実行中です", name)
+	// 管理中の既存インスタンスがあれば停止
+	if existing, ok := m.processes[name]; ok {
+		if existing.Cancel != nil {
+			existing.Cancel()
+		}
+		existing.Status = StatusStopped
+		time.Sleep(200 * time.Millisecond)
 	}
 
-	// 過去のクラッシュ等で孤立残留した古い同一プロセスを確実に終了（ポート衝突根絶）
-	baseName := filepath.Base(exePath)
-	killCmd := exec.Command("taskkill", "/F", "/IM", baseName)
-	killCmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
-	_ = killCmd.Run()
-	time.Sleep(300 * time.Millisecond)
+	// 指定されたエンドポイントのポートが使用中の場合、当該ポートのみ安全に解放（他サーバーへの影響ゼロ）
+	killProcessOnEndpoint(endpoint)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cmd := exec.CommandContext(ctx, exePath, args...)
@@ -181,4 +183,33 @@ func (m *Manager) GetStatus(name string) ProcessStatus {
 		return p.Status
 	}
 	return StatusStopped
+}
+
+// killProcessOnEndpoint は指定されたHTTPエンドポイントのポート番号を専有している残留プロセスを特定して終了します。
+// 他のポート（別サーバー）で稼働中のプロセスには一切影響を与えません。
+func killProcessOnEndpoint(endpoint string) {
+	if endpoint == "" {
+		return
+	}
+	// エンドポイントからポート番号を抽出 (例: "http://127.0.0.1:8085/..." -> "8085")
+	parts := strings.Split(endpoint, ":")
+	if len(parts) < 3 {
+		return
+	}
+	portPart := parts[2]
+	portPart = strings.Split(portPart, "/")[0]
+	portPart = strings.TrimSpace(portPart)
+	if portPart == "" {
+		return
+	}
+
+	// PowerShell を使用して該当ローカルポートをリッスンしているプロセスのみをピンポイントで強制終了
+	psCmd := fmt.Sprintf(
+		"Get-NetTCPConnection -LocalPort %s -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }",
+		portPart,
+	)
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", psCmd)
+	cmd.SysProcAttr = &syscall.SysProcAttr{HideWindow: true, CreationFlags: 0x08000000}
+	_ = cmd.Run()
+	time.Sleep(150 * time.Millisecond)
 }
