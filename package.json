@@ -1,0 +1,13 @@
+{
+  "name": "aicompanion-root",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "audit": "node scripts/audit/audit_all.mjs",
+    "audit:rules": "node scripts/audit/audit_code_rules.mjs",
+    "audit:ui": "node scripts/audit/audit_ui_mocks.mjs",
+    "test:go": "go test -v ./pkg/...",
+    "test:frontend": "cd frontend && npm run build"
+  }
+}

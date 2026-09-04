@@ -142,11 +142,11 @@ sequenceDiagram
 ### 4.1 Wails Events 仕様
 | イベント名 | 送信方向 | ペイロード型 | 説明 |
 | :--- | :--- | :--- | :--- |
-| `user-message` | FE ➔ BE | `{ "text": string }` | ユーザーのテキスト発言 |
-| `llm-token` | BE ➔ FE | `{ "token": string, "isFirst": boolean }` | 画面へのリアルタイム文字表示用トークン |
-| `avatar-speak` | BE ➔ FE & WS | `AvatarSpeakPayload` | 音声再生バイナリ、順序番号、感情、テキスト |
-| `playback-state` | FE ➔ BE | `{ "state": "idle" \| "playing" }` | フロントエンドの音声再生ステータス |
-| `system-status` | BE ➔ FE | `{ "llmReady": boolean, "ttsReady": boolean, "activeTTS": string, "activeTier": string }` | バックエンド初期化状態 |
+| `user-message` | FE -> BE | `{ "text": string }` | ユーザーのテキスト発言 |
+| `llm-token` | BE -> FE | `{ "token": string, "isFirst": boolean }` | 画面へのリアルタイム文字表示用トークン |
+| `avatar-speak` | BE -> FE & WS | `AvatarSpeakPayload` | 音声再生バイナリ、順序番号、感情、テキスト |
+| `playback-state` | FE -> BE | `{ "state": "idle" \| "playing" }` | フロントエンドの音声再生ステータス |
+| `system-status` | BE -> FE | `{ "llmReady": boolean, "ttsReady": boolean, "activeTTS": string, "activeTier": string }` | バックエンド初期化状態 |
 
 #### `AvatarSpeakPayload` 型定義
 ```json

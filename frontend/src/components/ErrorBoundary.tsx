@@ -1,5 +1,6 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { Button } from './ui/button';
+import { AlertTriangle } from 'lucide-react';
 
 interface Props {
   children: ReactNode;
@@ -35,8 +36,8 @@ export class ErrorBoundary extends Component<Props, State> {
     if (this.state.hasError) {
       return (
         <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-950 p-6 text-center text-zinc-100 select-none">
-          <div className="w-16 h-16 rounded-full bg-red-950/60 border border-red-800 flex items-center justify-center text-2xl mb-4">
-            ⚠️
+          <div className="w-16 h-16 rounded-full bg-red-950/60 border border-red-800 flex items-center justify-center mb-4">
+            <AlertTriangle className="w-8 h-8 text-red-500" />
           </div>
           <h3 className="text-base font-bold text-zinc-200">描画エラーが発生しました</h3>
           <p className="text-xs text-zinc-400 mt-2 max-w-md font-mono bg-zinc-900 p-3 rounded border border-zinc-800 text-left overflow-auto max-h-32">

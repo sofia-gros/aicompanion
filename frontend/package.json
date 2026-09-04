@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b && vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "audit": "node ../scripts/audit/audit_all.mjs"
   },
   "dependencies": {
     "@pixiv/three-vrm": "^3.3.6",

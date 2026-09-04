@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DownloadProgressPayload, SystemConfig } from '../types/events';
+import { DownloadProgressPayload, SystemConfig, SystemSpec } from '../types/events';
 import { CharacterProfile, DEFAULT_CHARACTERS } from '../types/character';
 import { WailsBridge } from '../services/wailsBridge';
 
@@ -45,7 +45,7 @@ interface AppState {
   // サービス稼働マスター状態
   isServicesRunning: boolean;
   downloadedModels: string[];
-  systemSpec: any;
+  systemSpec: SystemSpec | null;
 
   // システム設定
   config: SystemConfig;
@@ -72,7 +72,7 @@ interface AppState {
   duplicateCharacter: (id: string) => void;
   setServicesRunning: (running: boolean) => void;
   setDownloadedModels: (models: string[]) => void;
-  setSystemSpec: (spec: any) => void;
+  setSystemSpec: (spec: SystemSpec) => void;
   setFps: (fps: number) => void;
   setTokensPerSec: (tps: number) => void;
   setFirstAudioLatencyMs: (ms: number) => void;

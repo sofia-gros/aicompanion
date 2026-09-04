@@ -262,7 +262,7 @@ type TTSProvider interface {
 ```
 
 ### 5.2 VOICEVOX アダプター (`pkg/tts/voicevox.go`)
-VOICEVOX (ポート `50021`) の `/audio_query` ➔ `/synthesis` を透過処理。
+VOICEVOX (ポート `50021`) の `/audio_query` -> `/synthesis` を透過処理。
 
 ---
 

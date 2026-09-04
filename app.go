@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -366,9 +365,11 @@ func (a *App) SwitchDisplayMode(mode string) error {
 // LaunchOverlayWindow はStudioウィンドウとは独立した透過アバター別ウィンドウをデスクトップ上に起動します。
 func (a *App) LaunchOverlayWindow() error {
 	avatarURL := "http://127.0.0.1:18923/avatar.html"
-	// Edge App モードでタイトルバーやアドレスバーのない独立したアプリアイコンウィンドウとして起動
-	cmd := exec.Command("cmd", "/c", "start", "msedge", "--app="+avatarURL, "--window-size=450,700")
-	return cmd.Start()
+	if a.procManager != nil {
+		// Job Object の管理下で Edge App を起動（親プロセス終了時に確実に自動破棄）
+		return a.procManager.StartProcess("overlay_window", "msedge.exe", []string{"--app=" + avatarURL, "--window-size=450,700"}, "")
+	}
+	return nil
 }
 
 // SetClickThrough はマウス透過状態（WS_EX_TRANSPARENT）を切り替えます。

@@ -41,6 +41,16 @@ export interface SystemStatusPayload {
 }
 
 /**
+ * PCのハードウェアスペックおよび推奨モデル情報
+ */
+export interface SystemSpec {
+  totalRamGb: number;
+  availableRamGb: number;
+  recommendedTier: string;
+  recommendation: string;
+}
+
+/**
  * モデルダウンロードの進捗状況
  */
 export interface DownloadProgressPayload {
