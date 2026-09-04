@@ -9,6 +9,7 @@ import {
   UserPlus,
   CheckCircle2,
   Cpu,
+  Settings,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -16,7 +17,7 @@ import { useAppStore } from '../../stores/useAppStore';
 import { WailsBridge } from '../../services/wailsBridge';
 
 /**
- * Godot Engine 風の上部メインツールバー（プロジェクト実行/停止制御、キャラ切替・作成、Tier設定、配信連携）
+ * Godot Engine 風の上部メインツールバー（プロジェクト実行/停止制御、キャラ切替・作成、Tier設定、配信連携、設定モーダル）
  * 画面幅が狭くてもボタンが縦に崩れないレスポンシブ・折り返し防止設計
  */
 export const Toolbar: React.FC = () => {
@@ -24,6 +25,7 @@ export const Toolbar: React.FC = () => {
     config,
     updateConfig,
     setIsDownloaderOpen,
+    setIsSettingsModalOpen,
     characters,
     activeCharacterId,
     selectCharacter,
@@ -219,6 +221,18 @@ export const Toolbar: React.FC = () => {
         >
           <ExternalLink className="w-3 h-3 text-indigo-400 shrink-0" />
           <span>常駐オーバーレイ</span>
+        </Button>
+
+        {/* システム & 検索設定モーダルボタン */}
+        <Button
+          size="xs"
+          variant="outline"
+          className="h-6 gap-1 text-[11px] text-zinc-200 border-zinc-700 hover:bg-zinc-800 whitespace-nowrap shrink-0"
+          onClick={() => setIsSettingsModalOpen(true)}
+          title="Web情報解決（Level 0〜3）および外部API・モデル保存先設定を開きます"
+        >
+          <Settings className="w-3 h-3 text-indigo-400 shrink-0" />
+          <span>設定</span>
         </Button>
       </div>
     </header>

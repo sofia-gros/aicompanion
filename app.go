@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"os"
@@ -18,6 +19,7 @@ import (
 	"aicompanion/pkg/process"
 	"aicompanion/pkg/server"
 	"aicompanion/pkg/tts"
+	"aicompanion/pkg/websearch"
 
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 )
@@ -32,6 +34,13 @@ type SystemConfig struct {
 	Volume                 float32 `json:"volume"`                 // 音量 (0.0〜1.0)
 	LipSyncSensitivity     float32 `json:"lipSyncSensitivity"`     // リップシンク感度
 	EyeTrackingSensitivity float32 `json:"eyeTrackingSensitivity"` // 視線追従感度
+
+	// Web検索・外部API連携設定
+	WebSearchEnabled bool   `json:"webSearchEnabled"` // Web検索機能の有効/無効
+	TavilyAPIKey     string `json:"tavilyApiKey"`     // Tavily AI APIキー
+	CloudAPIKey      string `json:"cloudApiKey"`      // OpenAI互換 / Gemini APIキー
+	CloudAPIBaseURL  string `json:"cloudApiBaseUrl"`  // Base URL
+	CloudAPIModel    string `json:"cloudApiModel"`    // モデル名
 }
 
 // App はWailsアプリケーションのメインコントローラー構造体です。
@@ -45,6 +54,7 @@ type App struct {
 	pipeline     *pipeline.DialoguePipeline
 	downManager  *downloader.Manager
 	httpServer   *server.HTTPServer
+	searchRouter *websearch.Router
 	ttsVoicevox  *tts.VoicevoxProvider
 	ttsSBV2      *tts.StyleBertVITS2Provider
 	ttsMock      *tts.MockTTSProvider
@@ -58,6 +68,7 @@ func NewApp() *App {
 	procMgr, _ := process.NewManager()
 	tierMgr := llm.NewTierManager()
 	promptB := llm.NewDefaultPromptBuilder()
+	searchR := websearch.NewRouter()
 	downMgr := downloader.NewManager()
 	httpSrv := server.NewHTTPServer(18923, "frontend/dist")
 
@@ -82,19 +93,21 @@ func NewApp() *App {
 			Volume:                 1.0,
 			LipSyncSensitivity:     1.0,
 			EyeTrackingSensitivity: 1.0,
+			WebSearchEnabled:       true,
 		},
-		modelDir:    "models",
-		procManager: procMgr,
-		tierManager: tierMgr,
-		promptBuild: promptB,
-		memStore:    memStore,
-		pipeline:    pipe,
-		downManager: downMgr,
-		httpServer:  httpSrv,
-		ttsVoicevox: vvTTS,
-		ttsSBV2:     sbv2TTS,
-		ttsMock:     mockTTS,
-		activeTTS:   activeTTS,
+		modelDir:     "models",
+		procManager:  procMgr,
+		tierManager:  tierMgr,
+		promptBuild:  promptB,
+		memStore:     memStore,
+		pipeline:     pipe,
+		downManager:  downMgr,
+		httpServer:   httpSrv,
+		searchRouter: searchR,
+		ttsVoicevox:  vvTTS,
+		ttsSBV2:      sbv2TTS,
+		ttsMock:      mockTTS,
+		activeTTS:    activeTTS,
 	}
 }
 
@@ -309,10 +322,17 @@ func (a *App) shutdown(ctx context.Context) {
 	}
 }
 
-// SendMessage はユーザーからの発言を受け取り、対話ストリーミングと音声合成を開始します。
+// SendMessage はユーザーからの発言を受け取り、階層情報解決（Level 0〜4）を経て対話ストリーミングと音声合成を開始します。
 func (a *App) SendMessage(text string) error {
 	a.mutex.RLock()
-	defer a.mutex.RUnlock()
+	searchCfg := websearch.SearchConfig{
+		Enabled:         a.config.WebSearchEnabled,
+		TavilyAPIKey:    a.config.TavilyAPIKey,
+		CloudAPIKey:     a.config.CloudAPIKey,
+		CloudAPIBaseURL: a.config.CloudAPIBaseURL,
+		CloudAPIModel:   a.config.CloudAPIModel,
+	}
+	a.mutex.RUnlock()
 
 	if a.memStore != nil {
 		_ = a.memStore.AddLog("default", "user", text)
@@ -330,10 +350,57 @@ func (a *App) SendMessage(text string) error {
 		}
 	}
 
-	prompt := a.promptBuild.BuildPrompt(longMemories, history, text)
-
-	// バックグラウンドでストリーミング推論＆TTS実行
+	// バックグラウンドで階層情報検索 & ストリーミング推論＆TTS実行
 	go func() {
+		// Gemini風のアクションログ送出関数
+		logger := func(stage string, message string) {
+			if a.ctx != nil {
+				runtime.EventsEmit(a.ctx, "system-log", fmt.Sprintf("[%s] %s", stage, message))
+			}
+		}
+
+		var webContext string
+		var fillerReply string
+
+		if a.searchRouter != nil && searchCfg.Enabled {
+			intent := a.searchRouter.DetermineLevel(text)
+			if intent.Level != websearch.Level0LLMOnly {
+				fillerReply = intent.FillerReply
+				// 先行相槌をTTSで発話（初声遅延ゼロ化）
+				if fillerReply != "" && a.activeTTS != nil {
+					go func() {
+						opts := tts.TTSOptions{
+							SpeakerID: a.config.SpeakerID,
+							Speed:     1.0,
+						}
+						if res, err := a.activeTTS.Synthesize(context.Background(), fillerReply, opts); err == nil && res != nil {
+							speakEvt := pipeline.AvatarSpeakEvent{
+								SeqID:       1,
+								IsLast:      false,
+								Text:        fillerReply,
+								AudioFormat: res.ContentType,
+								AudioBase64: base64.StdEncoding.EncodeToString(res.AudioData),
+								Emotion:     "happy",
+								DurationMs:  res.DurationMs,
+							}
+							runtime.EventsEmit(a.ctx, "avatar-speak", speakEvt)
+							_ = a.httpServer.Hub().BroadcastAvatarEvent("avatar-speak", speakEvt)
+						}
+					}()
+				}
+
+				// 階層情報ルーターによる検索実行
+				res, err := a.searchRouter.Dispatch(context.Background(), searchCfg, text, logger)
+				if err == nil && res != nil {
+					webContext = fmt.Sprintf("【出典: %s (%s)】\n%s", res.Title, res.Source, res.Snippet)
+				}
+			} else {
+				logger("思考", "日常対話・内部知識と判定 (外部検索スキップ)")
+			}
+		}
+
+		prompt := a.promptBuild.BuildPromptWithContext(longMemories, history, webContext, text)
+
 		var fullReply string
 		_ = a.pipeline.ProcessUserInput(
 			context.Background(),
@@ -343,6 +410,10 @@ func (a *App) SendMessage(text string) error {
 				runtime.EventsEmit(a.ctx, "llm-token", t)
 			},
 			func(s pipeline.AvatarSpeakEvent) {
+				// 先行相槌があった場合は SeqID をオフセットして整列
+				if fillerReply != "" {
+					s.SeqID += 1
+				}
 				// Wailsフロントエンドへ送出
 				runtime.EventsEmit(a.ctx, "avatar-speak", s)
 				// OBSブラウザソースへWebSocketブロードキャスト
@@ -358,6 +429,36 @@ func (a *App) SendMessage(text string) error {
 		}
 	}()
 
+	return nil
+}
+
+// GetSearchConfig は現在のWeb検索および外部API設定を取得します。
+func (a *App) GetSearchConfig() websearch.SearchConfig {
+	a.mutex.RLock()
+	defer a.mutex.RUnlock()
+	return websearch.SearchConfig{
+		Enabled:         a.config.WebSearchEnabled,
+		TavilyAPIKey:    a.config.TavilyAPIKey,
+		CloudAPIKey:     a.config.CloudAPIKey,
+		CloudAPIBaseURL: a.config.CloudAPIBaseURL,
+		CloudAPIModel:   a.config.CloudAPIModel,
+	}
+}
+
+// SaveSearchConfig はWeb検索および外部API設定を保存・更新します。
+func (a *App) SaveSearchConfig(cfg websearch.SearchConfig) error {
+	a.mutex.Lock()
+	defer a.mutex.Unlock()
+
+	a.config.WebSearchEnabled = cfg.Enabled
+	a.config.TavilyAPIKey = cfg.TavilyAPIKey
+	a.config.CloudAPIKey = cfg.CloudAPIKey
+	a.config.CloudAPIBaseURL = cfg.CloudAPIBaseURL
+	a.config.CloudAPIModel = cfg.CloudAPIModel
+
+	if a.ctx != nil {
+		runtime.EventsEmit(a.ctx, "system-log", "[設定] Web検索・API設定を更新しました")
+	}
 	return nil
 }
 

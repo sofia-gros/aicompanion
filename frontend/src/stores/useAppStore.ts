@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DownloadProgressPayload, SystemConfig, SystemSpec } from '../types/events';
+import { DownloadProgressPayload, SearchConfig, SystemConfig, SystemSpec } from '../types/events';
 import { CharacterProfile, DEFAULT_CHARACTERS } from '../types/character';
 import { WailsBridge } from '../services/wailsBridge';
 
@@ -32,6 +32,7 @@ interface AppState {
   avatarType: 'live2d' | 'vrm';
   vrmModelUrl: string;
   isCharacterModalOpen: boolean;
+  isSettingsModalOpen: boolean;
 
   // 対話・音声状態
   companionState: CompanionState;
@@ -47,8 +48,9 @@ interface AppState {
   downloadedModels: string[];
   systemSpec: SystemSpec | null;
 
-  // システム設定
+  // システム設定 & Web情報解決設定
   config: SystemConfig;
+  searchConfig: SearchConfig;
 
   // ダウンロード状態
   downloadProgress: DownloadProgressPayload | null;
@@ -81,6 +83,7 @@ interface AppState {
   setAvatarType: (type: 'live2d' | 'vrm') => void;
   setVrmModelUrl: (url: string) => void;
   setIsCharacterModalOpen: (open: boolean) => void;
+  setIsSettingsModalOpen: (open: boolean) => void;
   setCompanionState: (state: CompanionState) => void;
   setCurrentSubtitle: (text: string) => void;
   appendStreamingText: (token: string, isFirst: boolean) => void;
@@ -89,6 +92,8 @@ interface AppState {
   setIsMicListening: (listening: boolean) => void;
   setCurrentEmotion: (emotion: string) => void;
   updateConfig: (partial: Partial<SystemConfig>) => void;
+  setSearchConfig: (cfg: SearchConfig) => void;
+  updateSearchConfig: (partial: Partial<SearchConfig>) => void;
   setDownloadProgress: (progress: DownloadProgressPayload | null) => void;
   setIsDownloaderOpen: (open: boolean) => void;
   setViewportBg: (bg: 'checker' | 'green' | 'magenta' | 'dark') => void;
@@ -110,6 +115,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   avatarType: 'live2d',
   vrmModelUrl: DEFAULT_CHARACTERS[0].vrmModelPath || '/vrm/Seed-san.vrm',
   isCharacterModalOpen: false,
+  isSettingsModalOpen: false,
 
   companionState: 'idle',
   currentSubtitle: '',
@@ -131,6 +137,14 @@ export const useAppStore = create<AppState>((set, get) => ({
     volume: 1.0,
     lipSyncSensitivity: 1.0,
     eyeTrackingSensitivity: 1.0,
+  },
+
+  searchConfig: {
+    enabled: true,
+    tavilyApiKey: '',
+    cloudApiKey: '',
+    cloudApiBaseUrl: 'https://api.openai.com/v1',
+    cloudApiModel: 'gpt-4o-mini',
   },
 
   downloadProgress: null,
@@ -268,8 +282,18 @@ export const useAppStore = create<AppState>((set, get) => ({
       companionState: listening ? 'listening' : 'idle',
     }),
   setCurrentEmotion: (emotion) => set({ currentEmotion: emotion }),
+  setIsSettingsModalOpen: (open) => set({ isSettingsModalOpen: open }),
   updateConfig: (partial) =>
     set((s) => ({ config: { ...s.config, ...partial } })),
+  setSearchConfig: (cfg) => {
+    set({ searchConfig: cfg });
+    WailsBridge.saveSearchConfig(cfg);
+  },
+  updateSearchConfig: (partial) => {
+    const next = { ...get().searchConfig, ...partial };
+    set({ searchConfig: next });
+    WailsBridge.saveSearchConfig(next);
+  },
   setDownloadProgress: (progress) => set({ downloadProgress: progress }),
   setIsDownloaderOpen: (open) => set({ isDownloaderOpen: open }),
   setViewportBg: (bg) => set({ viewportBg: bg }),

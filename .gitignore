@@ -22,8 +22,9 @@ yarn-error.log*
 test-results/
 **/test-results/**
 
-# データベース
+# データベース & ログ
 data/
+logs/
 
 # OS & エディタ
 .DS_Store

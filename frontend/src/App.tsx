@@ -7,6 +7,7 @@ import { Inspector } from './components/studio/Inspector';
 import { BottomPanel } from './components/studio/BottomPanel';
 import { ModelDownloaderModal } from './components/studio/ModelDownloaderModal';
 import { CharacterModal } from './components/studio/CharacterModal';
+import { SettingsModal } from './components/studio/SettingsModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AudioService } from './services/audioService';
 import { WailsBridge } from './services/wailsBridge';
@@ -41,6 +42,7 @@ export const App: React.FC = () => {
     setServicesRunning,
     addChatMessage,
     addLog,
+    setSearchConfig,
   } = useAppStore();
 
   const activeChar = characters.find((c) => c.id === activeCharacterId) || characters[0];
@@ -89,6 +91,9 @@ export const App: React.FC = () => {
       if (models.length > 0) {
         addLog(`[System] 導入済みローカルモデル: ${models.join(', ')}`);
       }
+    });
+    WailsBridge.getSearchConfig().then((cfg) => {
+      setSearchConfig(cfg);
     });
 
     // 起動時アクティブキャラクター設定をLLMに同期
@@ -242,6 +247,9 @@ export const App: React.FC = () => {
           isOpen={isCharacterModalOpen}
           onClose={() => setIsCharacterModalOpen(false)}
         />
+
+        {/* システム & 階層型検索設定モーダル */}
+        <SettingsModal />
       </div>
     </ErrorBoundary>
   );

@@ -42,6 +42,11 @@ export namespace main {
 	    volume: number;
 	    lipSyncSensitivity: number;
 	    eyeTrackingSensitivity: number;
+	    webSearchEnabled: boolean;
+	    tavilyApiKey: string;
+	    cloudApiKey: string;
+	    cloudApiBaseUrl: string;
+	    cloudApiModel: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SystemConfig(source);
@@ -57,6 +62,11 @@ export namespace main {
 	        this.volume = source["volume"];
 	        this.lipSyncSensitivity = source["lipSyncSensitivity"];
 	        this.eyeTrackingSensitivity = source["eyeTrackingSensitivity"];
+	        this.webSearchEnabled = source["webSearchEnabled"];
+	        this.tavilyApiKey = source["tavilyApiKey"];
+	        this.cloudApiKey = source["cloudApiKey"];
+	        this.cloudApiBaseUrl = source["cloudApiBaseUrl"];
+	        this.cloudApiModel = source["cloudApiModel"];
 	    }
 	}
 
@@ -80,6 +90,31 @@ export namespace platform {
 	        this.availableRamGb = source["availableRamGb"];
 	        this.recommendedTier = source["recommendedTier"];
 	        this.recommendation = source["recommendation"];
+	    }
+	}
+
+}
+
+export namespace websearch {
+	
+	export class SearchConfig {
+	    enabled: boolean;
+	    tavilyApiKey: string;
+	    cloudApiKey: string;
+	    cloudApiBaseUrl: string;
+	    cloudApiModel: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SearchConfig(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.enabled = source["enabled"];
+	        this.tavilyApiKey = source["tavilyApiKey"];
+	        this.cloudApiKey = source["cloudApiKey"];
+	        this.cloudApiBaseUrl = source["cloudApiBaseUrl"];
+	        this.cloudApiModel = source["cloudApiModel"];
 	    }
 	}
 

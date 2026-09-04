@@ -62,6 +62,11 @@ func (b *PromptBuilder) GetProfile() CharacterProfile {
 
 // BuildPrompt は長期記憶・短期ログ・ユーザー入力を結合したChatML形式プロンプトを構築します。
 func (b *PromptBuilder) BuildPrompt(longTermMemories []string, historyLogs [][2]string, currentInput string) string {
+	return b.BuildPromptWithContext(longTermMemories, historyLogs, "", currentInput)
+}
+
+// BuildPromptWithContext はリアルタイムWeb検索コンテキストを含むChatML形式プロンプトを構築します。
+func (b *PromptBuilder) BuildPromptWithContext(longTermMemories []string, historyLogs [][2]string, webContext string, currentInput string) string {
 	b.mutex.RLock()
 	defer b.mutex.RUnlock()
 
@@ -90,6 +95,11 @@ func (b *PromptBuilder) BuildPrompt(longTermMemories []string, historyLogs [][2]
 	if len(longTermMemories) > 0 {
 		sb.WriteString("【思い出・過去の会話記憶】\n- " + strings.Join(longTermMemories, "\n- ") + "\n")
 	}
+
+	if webContext != "" {
+		sb.WriteString("【リアルタイム検索・参考情報】\n以下の最新情報・外部データを踏まえ、あなたのキャラクター口調を崩さずに自然に答えてください。\n" + webContext + "\n")
+	}
+
 	sb.WriteString("<|im_end|>\n")
 
 	// 2. 短期記憶ログ

@@ -18,6 +18,10 @@ export function GetModelDirectory() {
   return window['go']['main']['App']['GetModelDirectory']();
 }
 
+export function GetSearchConfig() {
+  return window['go']['main']['App']['GetSearchConfig']();
+}
+
 export function GetSystemConfig() {
   return window['go']['main']['App']['GetSystemConfig']();
 }
@@ -28,6 +32,10 @@ export function GetSystemSpec() {
 
 export function LaunchOverlayWindow() {
   return window['go']['main']['App']['LaunchOverlayWindow']();
+}
+
+export function SaveSearchConfig(arg1) {
+  return window['go']['main']['App']['SaveSearchConfig'](arg1);
 }
 
 export function SelectModelDirectory() {

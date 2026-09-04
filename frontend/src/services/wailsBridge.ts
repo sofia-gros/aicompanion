@@ -1,4 +1,4 @@
-import { AvatarSpeakPayload, DownloadProgressPayload, LLMTokenPayload, SystemConfig } from '../types/events';
+import { AvatarSpeakPayload, DownloadProgressPayload, LLMTokenPayload, SearchConfig, SystemConfig } from '../types/events';
 
 /**
  * Wails v2 Window オブジェクトの型定義
@@ -225,6 +225,31 @@ export class WailsBridge {
   public static async cancelModelDownload(): Promise<void> {
     if (this.isWails() && window.go?.main?.App?.CancelModelDownload) {
       await window.go.main.App.CancelModelDownload();
+    }
+  }
+
+  /**
+   * Web検索・情報解決設定を取得します。
+   */
+  public static async getSearchConfig(): Promise<SearchConfig> {
+    if (this.isWails() && (window.go?.main?.App as any)?.GetSearchConfig) {
+      return await (window.go?.main?.App as any).GetSearchConfig();
+    }
+    return {
+      enabled: true,
+      tavilyApiKey: '',
+      cloudApiKey: '',
+      cloudApiBaseUrl: 'https://api.openai.com/v1',
+      cloudApiModel: 'gpt-4o-mini',
+    };
+  }
+
+  /**
+   * Web検索・情報解決設定を保存します。
+   */
+  public static async saveSearchConfig(cfg: SearchConfig): Promise<void> {
+    if (this.isWails() && (window.go?.main?.App as any)?.SaveSearchConfig) {
+      await (window.go?.main?.App as any).SaveSearchConfig(cfg);
     }
   }
 

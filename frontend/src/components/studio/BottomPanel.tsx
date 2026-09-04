@@ -342,12 +342,51 @@ export const BottomPanel: React.FC<BottomPanelProps> = ({ audioService }) => {
                 <span>記憶消去</span>
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto font-mono text-[11px] text-zinc-400 space-y-0.5 p-1 bg-zinc-950 rounded border border-zinc-800">
-              {logs.map((log, i) => (
-                <div key={i} className="leading-tight">
-                  {log}
-                </div>
-              ))}
+            <div className="flex-1 overflow-y-auto font-mono text-[11px] text-zinc-300 space-y-1 p-2 bg-zinc-950 rounded border border-zinc-800">
+              {logs.map((log, i) => {
+                // Gemini風タグ [タグ名] の検出
+                const match = log.match(/^(\[\d{1,2}:\d{2}:\d{2}\])?\s*\[([^\]]+)\](.*)$/);
+                if (match) {
+                  const timestamp = match[1] || '';
+                  const tag = match[2];
+                  const content = match[3];
+
+                  let tagStyle = 'bg-zinc-800 text-zinc-300 border-zinc-700';
+                  if (tag.includes('思考')) {
+                    tagStyle = 'bg-purple-950/80 text-purple-300 border-purple-800/80';
+                  } else if (tag.includes('判定')) {
+                    tagStyle = 'bg-sky-950/80 text-sky-300 border-sky-800/80';
+                  } else if (tag.includes('実行')) {
+                    tagStyle = 'bg-amber-950/80 text-amber-300 border-amber-800/80';
+                  } else if (tag.includes('取得')) {
+                    tagStyle = 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80';
+                  } else if (tag.includes('解析')) {
+                    tagStyle = 'bg-teal-950/80 text-teal-300 border-teal-800/80';
+                  } else if (tag.includes('生成')) {
+                    tagStyle = 'bg-indigo-950/80 text-indigo-300 border-indigo-800/80';
+                  } else if (tag.includes('エラー') || tag.includes('失敗')) {
+                    tagStyle = 'bg-rose-950/80 text-rose-300 border-rose-800/80';
+                  } else if (tag.includes('警告')) {
+                    tagStyle = 'bg-yellow-950/80 text-yellow-300 border-yellow-800/80';
+                  }
+
+                  return (
+                    <div key={i} className="leading-relaxed flex items-start space-x-1.5 break-all">
+                      {timestamp && <span className="text-[10px] text-zinc-500 shrink-0 select-none">{timestamp}</span>}
+                      <span className={`px-1.5 py-0.2 rounded border text-[10px] font-semibold shrink-0 select-none ${tagStyle}`}>
+                        {tag}
+                      </span>
+                      <span className="text-zinc-200">{content}</span>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={i} className="leading-relaxed text-zinc-400">
+                    {log}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}

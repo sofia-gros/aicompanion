@@ -76,3 +76,20 @@ export interface SystemConfig {
   lipSyncSensitivity: number;
   eyeTrackingSensitivity: number;
 }
+
+/**
+ * 階層型Web情報解決・検索設定
+ */
+export interface SearchConfig {
+  /** Web情報解決機能の有効/無効 */
+  enabled: boolean;
+  /** Tavily AI APIキー */
+  tavilyApiKey: string;
+  /** OpenAPI形式 / Google Gemini / OpenAI 互換APIキー */
+  cloudApiKey: string;
+  /** API Base URL (例: https://api.openai.com/v1) */
+  cloudApiBaseUrl: string;
+  /** 使用モデル名 (例: gpt-4o-mini, gemini-2.0-flash) */
+  cloudApiModel: string;
+}
+
