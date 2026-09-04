@@ -25,8 +25,12 @@ export const App: React.FC = () => {
     characters,
     activeCharacterId,
     isServicesRunning,
+    currentSubtitle,
     setCurrentSubtitle,
+    streamingText,
     appendStreamingText,
+    clearStreamingText,
+    isAudioPlaying,
     setIsAudioPlaying,
     setCurrentEmotion,
     downloadProgress,
@@ -53,6 +57,7 @@ export const App: React.FC = () => {
   const tokenCountRef = useRef<number>(0);
   const sendTimeRef = useRef<number>(0);
   const lastActiveTimeRef = useRef<number>(Date.now());
+  const subtitleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   if (!audioServiceRef.current) {
     audioServiceRef.current = new AudioService(
@@ -60,6 +65,36 @@ export const App: React.FC = () => {
       (isPlaying) => setIsAudioPlaying(isPlaying)
     );
   }
+
+  // 音声再生終了後2秒で吹き出し（字幕・思考テキスト）を自動消去するタイマー
+  useEffect(() => {
+    if (isAudioPlaying) {
+      // 発話・再生中は消去タイマーを即座にキャンセル
+      if (subtitleTimerRef.current) {
+        clearTimeout(subtitleTimerRef.current);
+        subtitleTimerRef.current = null;
+      }
+    } else {
+      // 音声再生が終了した場合、2秒後に吹き出しを消去
+      if (currentSubtitle || streamingText) {
+        if (subtitleTimerRef.current) {
+          clearTimeout(subtitleTimerRef.current);
+        }
+        subtitleTimerRef.current = setTimeout(() => {
+          setCurrentSubtitle('');
+          clearStreamingText();
+          setCurrentEmotion('neutral');
+          subtitleTimerRef.current = null;
+        }, 2000);
+      }
+    }
+
+    return () => {
+      if (subtitleTimerRef.current) {
+        clearTimeout(subtitleTimerRef.current);
+      }
+    };
+  }, [isAudioPlaying, currentSubtitle, streamingText, setCurrentSubtitle, clearStreamingText, setCurrentEmotion]);
 
   // 自発的発話（独り言・見守り）タイマー
   useEffect(() => {
