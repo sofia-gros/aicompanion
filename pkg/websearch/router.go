@@ -127,15 +127,20 @@ func (r *Router) DetermineLevel(userInput string) SearchIntent {
 		}
 	}
 
-	// 4. 明示的なスクレイピング・Webサイト解析要求（Level 3: スクレイピング）判定
-	scrapeRegex := regexp.MustCompile(`(スクレイピング|ページ読んで|サイト見て|URL)`)
-	if scrapeRegex.MatchString(trimmed) {
-		query := r.analyzer.extractSearchQuery(trimmed)
+	// 4. 明示的なURL指定・スクレイピング要求（Level 3: スクレイピング）判定
+	urlRegex := regexp.MustCompile(`https?://[^\s]+`)
+	scrapeKeywordRegex := regexp.MustCompile(`(スクレイピング|このページ読んで|このサイト読んで|このページ見て|このサイト見て)`)
+	if urlRegex.MatchString(trimmed) || scrapeKeywordRegex.MatchString(trimmed) {
+		targetURL := urlRegex.FindString(trimmed)
+		query := targetURL
+		if query == "" {
+			query = r.analyzer.extractSearchQuery(trimmed)
+		}
 		return SearchIntent{
 			Level:       Level3Scraping,
 			Query:       query,
-			Reason:      "Webページ解析・スクレイピング要求",
-			FillerReply: "対象のページを直接確認してみるね！",
+			Reason:      "指定Webページの直接解析・スクレイピング要求",
+			FillerReply: "対象のWebページを確認してみるね！",
 		}
 	}
 
@@ -315,12 +320,28 @@ func (r *Router) Dispatch(
 			logger("警告", fmt.Sprintf("Tavily検索エラー: %v", err))
 		}
 
-		// APIキーが一切未登録、または両方失敗した場合は Level 3 (最終手段、スクレイピング) へフォールバック
-		logger("判定", "外部APIキー未設定またはエラーのため、Level 3 (最終手段: スクレイピング) へ自動移行します")
-		return r.fallbackScrape(ctx, intent.Query, logger)
+		// APIキー未登録時、またはAPI照会失敗時の安全な無料検索フォールバック（スクレイピングは絶対に実行しない）
+		logger("思考", "外部APIキー未登録のため、無料Web検索で最新見出し・概要を取得します（設定画面でGemini/OpenAI等のAPIキーを設定すると高精度AI検索が可能になります）")
+		ddgResults, ddgErr := r.searcher.Search(ctx, intent.Query, 3)
+		if ddgErr == nil && len(ddgResults) > 0 {
+			logger("取得", fmt.Sprintf("無料Web検索から %d 件の最新見出し・概要を取得完了", len(ddgResults)))
+			var combined strings.Builder
+			for i, item := range ddgResults {
+				combined.WriteString(fmt.Sprintf("[%d] %s: %s\n", i+1, item.Title, item.Snippet))
+			}
+			return &SearchResult{
+				Title:   ddgResults[0].Title,
+				Snippet: combined.String(),
+				URL:     ddgResults[0].URL,
+				Source:  "Web検索 (DuckDuckGoニューススニペット)",
+			}, nil
+		}
+
+		logger("通知", "外部情報の検索結果が得られませんでした。ローカル知識で回答します")
+		return nil, nil
 
 	case Level3Scraping:
-		logger("判定", fmt.Sprintf("レベル判定: Level 3 (最終手段、スクレイピング) - 理由: %s", intent.Reason))
+		logger("判定", fmt.Sprintf("レベル判定: Level 3 (Webページ直接解析) - 理由: %s", intent.Reason))
 		return r.fallbackScrape(ctx, intent.Query, logger)
 
 	default:
@@ -328,9 +349,26 @@ func (r *Router) Dispatch(
 	}
 }
 
-// fallbackScrape はAPIキー未登録時や失敗時の最終手段としてDuckDuckGo検索とgoqueryスクレイピングを実行します。
+// fallbackScrape は指定されたWebページまたは明示的なスクレイピング要求に対してgoqueryスクレイピングを実行します。
 func (r *Router) fallbackScrape(ctx context.Context, query string, logger ActionTraceLogger) (*SearchResult, error) {
-	logger("実行", fmt.Sprintf("DuckDuckGo HTML で検索実行中: \"%s\"", query))
+	// 直接URLが指定されている場合は検索を挟まずに即座にページ本文を抽出
+	if strings.HasPrefix(query, "http://") || strings.HasPrefix(query, "https://") {
+		logger("実行", fmt.Sprintf("指定URLを直接スクレイピング中: %s", query))
+		content, err := r.scraper.FetchAndExtract(ctx, query, 600)
+		if err == nil && content != "" {
+			logger("解析", fmt.Sprintf("指定ページの本文抽出完了 (文字数: %d文字)", len(content)))
+			return &SearchResult{
+				Title:   query,
+				Snippet: content,
+				URL:     query,
+				Source:  "WebScraper (Direct URL)",
+			}, nil
+		}
+		logger("警告", fmt.Sprintf("URL直接スクレイピング失敗: %v", err))
+		return nil, err
+	}
+
+	logger("実行", fmt.Sprintf("DuckDuckGo HTML で対象ページを検索中: \"%s\"", query))
 	results, err := r.searcher.Search(ctx, query, 3)
 	if err != nil || len(results) == 0 {
 		logger("警告", fmt.Sprintf("自前Web検索で結果を取得できませんでした: %v", err))
