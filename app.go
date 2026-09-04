@@ -98,6 +98,12 @@ func NewApp() *App {
 			LipSyncSensitivity:     1.0,
 			EyeTrackingSensitivity: 1.0,
 			WebSearchEnabled:       true,
+			DirectCloudMode:        false,
+			CloudProvider:          "gemini",
+			CloudAPIBaseURL:        "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+			CloudAPIModel:          "gemini-2.0-flash",
+			ClassifierMode:         "llm",
+			ClassifierModel:        "smollm2-135m-instruct-q4_k_m.gguf",
 		},
 		modelDir:     "models",
 		procManager:  procMgr,
@@ -474,17 +480,25 @@ func (a *App) SendMessage(text string) error {
 		if searchCfg.DirectCloudMode && searchCfg.CloudAPIKey != "" {
 			providerName := searchCfg.CloudProvider
 			if providerName == "" {
-				providerName = "Cloud API"
+				providerName = "gemini"
 			}
-			logger("クラウド直接対話", fmt.Sprintf("完全クラウドモード稼働中 (%s: %s)。レベル判定とローカル推論をスキップして直接対話を開始します", providerName, searchCfg.CloudAPIModel))
+			baseURL := searchCfg.CloudAPIBaseURL
+			if baseURL == "" {
+				baseURL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+			}
+			model := searchCfg.CloudAPIModel
+			if model == "" {
+				model = "gemini-2.0-flash"
+			}
+			logger("クラウド直接対話", fmt.Sprintf("完全クラウドモード稼働中 (%s: %s)。レベル判定とローカル推論をスキップして直接対話を開始します", providerName, model))
 			prompt := a.promptBuild.BuildPromptWithContext(longMemories, history, "", text)
 
 			var fullReply string
 			_ = a.pipeline.ProcessUserInputDirectCloud(
 				context.Background(),
 				searchCfg.CloudAPIKey,
-				searchCfg.CloudAPIBaseURL,
-				searchCfg.CloudAPIModel,
+				baseURL,
+				model,
 				prompt,
 				func(t pipeline.LLMTokenEvent) {
 					fullReply += t.Token
@@ -581,14 +595,28 @@ func (a *App) SendMessage(text string) error {
 func (a *App) GetSearchConfig() websearch.SearchConfig {
 	a.mutex.RLock()
 	defer a.mutex.RUnlock()
+
+	provider := a.config.CloudProvider
+	if provider == "" {
+		provider = "gemini"
+	}
+	baseURL := a.config.CloudAPIBaseURL
+	if baseURL == "" {
+		baseURL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+	}
+	model := a.config.CloudAPIModel
+	if model == "" {
+		model = "gemini-2.0-flash"
+	}
+
 	return websearch.SearchConfig{
 		Enabled:            a.config.WebSearchEnabled,
 		DirectCloudMode:    a.config.DirectCloudMode,
-		CloudProvider:      a.config.CloudProvider,
+		CloudProvider:      provider,
 		TavilyAPIKey:       a.config.TavilyAPIKey,
 		CloudAPIKey:        a.config.CloudAPIKey,
-		CloudAPIBaseURL:    a.config.CloudAPIBaseURL,
-		CloudAPIModel:      a.config.CloudAPIModel,
+		CloudAPIBaseURL:    baseURL,
+		CloudAPIModel:      model,
 		ClassifierMode:     a.config.ClassifierMode,
 		ClassifierModel:    a.config.ClassifierModel,
 		ClassifierEndpoint: "http://127.0.0.1:8085/completion",

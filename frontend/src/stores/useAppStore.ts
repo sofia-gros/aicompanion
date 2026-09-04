@@ -351,13 +351,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   updateConfig: (partial) =>
     set((s) => ({ config: { ...s.config, ...partial } })),
   setSearchConfig: (cfg) => {
-    set({ searchConfig: cfg });
-    WailsBridge.saveSearchConfig(cfg);
+    const sanitized: SearchConfig = {
+      ...cfg,
+      cloudProvider: cfg.cloudProvider || 'gemini',
+      cloudApiBaseUrl: cfg.cloudApiBaseUrl || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+      cloudApiModel: cfg.cloudApiModel || 'gemini-2.0-flash',
+    };
+    set({ searchConfig: sanitized });
   },
   updateSearchConfig: (partial) => {
     const next = { ...get().searchConfig, ...partial };
-    set({ searchConfig: next });
-    WailsBridge.saveSearchConfig(next);
+    const sanitized: SearchConfig = {
+      ...next,
+      cloudProvider: next.cloudProvider || 'gemini',
+      cloudApiBaseUrl: next.cloudApiBaseUrl || 'https://generativelanguage.googleapis.com/v1beta/openai/chat/completions',
+      cloudApiModel: next.cloudApiModel || 'gemini-2.0-flash',
+    };
+    set({ searchConfig: sanitized });
+    WailsBridge.saveSearchConfig(sanitized);
   },
   setDownloadProgress: (progress) => set({ downloadProgress: progress }),
   setIsDownloaderOpen: (open) => set({ isDownloaderOpen: open }),

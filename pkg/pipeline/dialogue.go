@@ -7,6 +7,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 	"sync"
@@ -227,10 +228,26 @@ func (p *DialoguePipeline) ProcessUserInputDirectCloud(
 	p.mutex.RUnlock()
 
 	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1/chat/completions"
+		baseURL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
 	}
 	if model == "" {
-		model = "gpt-4o-mini"
+		model = "gemini-2.0-flash"
+	}
+
+	// エンドポイントの自動補正 (末尾が /chat/completions でない場合は付与)
+	endpoint := baseURL
+	if !strings.HasSuffix(endpoint, "/chat/completions") {
+		endpoint = strings.TrimSuffix(endpoint, "/") + "/chat/completions"
+	}
+
+	// Google Gemini (generativelanguage.googleapis.com) の認証多重保証
+	// Bearer 認証に加え、URLパラメータ ?key= および x-goog-api-key ヘッダーを二重三重に付与
+	if strings.Contains(endpoint, "googleapis.com") && apiKey != "" && !strings.Contains(endpoint, "key=") {
+		if strings.Contains(endpoint, "?") {
+			endpoint += "&key=" + apiKey
+		} else {
+			endpoint += "?key=" + apiKey
+		}
 	}
 
 	reqBody := map[string]interface{}{
@@ -246,23 +263,35 @@ func (p *DialoguePipeline) ProcessUserInputDirectCloud(
 		return fmt.Errorf("クラウドAPIリクエストJSON作成失敗: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, baseURL, bytes.NewReader(jsonBytes))
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, endpoint, bytes.NewReader(jsonBytes))
 	if err != nil {
 		return fmt.Errorf("クラウドAPIリクエスト生成失敗: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 	if apiKey != "" {
 		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("x-goog-api-key", apiKey)
 	}
 
 	resp, err := p.httpClient.Do(req)
 	if err != nil || (resp != nil && resp.StatusCode >= 400) {
 		status := 0
+		var errorDetail string
 		if resp != nil {
 			status = resp.StatusCode
+			if bodyBytes, readErr := io.ReadAll(resp.Body); readErr == nil && len(bodyBytes) > 0 {
+				errorDetail = string(bodyBytes)
+			}
 			_ = resp.Body.Close()
 		}
-		infoText := fmt.Sprintf("クラウドAPI通信に失敗しました (ステータス: %d)。APIキーやネットワーク接続をご確認ください。", status)
+		infoText := fmt.Sprintf("クラウドAPI通信に失敗しました (ステータス: %d)。APIキーやモデル設定をご確認ください。", status)
+		if errorDetail != "" {
+			// 短くエラー詳細を付記
+			if len(errorDetail) > 100 {
+				errorDetail = errorDetail[:100] + "..."
+			}
+			infoText += fmt.Sprintf(" [%s]", errorDetail)
+		}
 		for _, r := range infoText {
 			if onToken != nil {
 				onToken(LLMTokenEvent{Token: string(r), IsFirst: false})

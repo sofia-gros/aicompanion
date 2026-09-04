@@ -31,15 +31,26 @@ func (c *CloudLLMClient) Query(ctx context.Context, apiKey string, baseURL strin
 	}
 
 	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
+		baseURL = "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
 	}
-	baseURL = strings.TrimSuffix(baseURL, "/")
+
+	endpoint := baseURL
+	if !strings.HasSuffix(endpoint, "/chat/completions") {
+		endpoint = strings.TrimSuffix(endpoint, "/") + "/chat/completions"
+	}
+
+	// Google Gemini の場合は URL パラメータとヘッダーの両方をサポート
+	if strings.Contains(endpoint, "googleapis.com") && apiKey != "" && !strings.Contains(endpoint, "key=") {
+		if strings.Contains(endpoint, "?") {
+			endpoint += "&key=" + apiKey
+		} else {
+			endpoint += "?key=" + apiKey
+		}
+	}
 
 	if model == "" {
-		model = "gpt-4o-mini"
+		model = "gemini-2.0-flash"
 	}
-
-	endpoint := baseURL + "/chat/completions"
 
 	reqBody := map[string]interface{}{
 		"model": model,
@@ -59,7 +70,10 @@ func (c *CloudLLMClient) Query(ctx context.Context, apiKey string, baseURL strin
 		return "", fmt.Errorf("HTTPリクエスト作成失敗: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+apiKey)
+	if apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+apiKey)
+		req.Header.Set("x-goog-api-key", apiKey)
+	}
 
 	resp, err := c.client.Do(req)
 	if err != nil {
