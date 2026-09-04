@@ -19,7 +19,7 @@ test.describe('AI Companion Studio 自動操作・整合性テスト (バグゼ�
     await expect(page.locator('button:has-text("停止")')).toBeVisible();
 
     // 新規キャラクター作成ボタンの存在確認 (絵文字なし)
-    await expect(page.locator('button:has-text("新規キャラクター作成")')).toBeVisible();
+    await expect(page.locator('button[title="新規キャラクター追加"]')).toBeVisible();
 
     // 4ペインの確認
     await expect(page.locator('text=Scene Hierarchy')).toBeVisible();
@@ -59,8 +59,8 @@ test.describe('AI Companion Studio 自動操作・整合性テスト (バグゼ�
   test('キャラクター作成モーダル開閉テスト (絵文字なしボタン)', async ({ page }) => {
     await page.goto('/');
 
-    // ツールバーの「新規キャラクター作成」ボタンをクリック
-    const createBtn = page.locator('button:has-text("新規キャラクター作成")');
+    // SceneTreeの「新規キャラクター追加」ボタンをクリック
+    const createBtn = page.locator('button[title="新規キャラクター追加"]');
     await createBtn.click();
     await page.waitForTimeout(300);
 

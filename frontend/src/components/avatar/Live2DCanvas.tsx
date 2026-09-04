@@ -44,6 +44,8 @@ export const Live2DCanvas: React.FC<Live2DCanvasProps> = ({
 
     try {
       (Live2DModel as any).registerTicker(PIXI.Ticker);
+      // ヘッドレスブラウザや一部GPU環境でのシェーダーMAXユニット0例外を防止
+      PIXI.settings.PREFER_ENV = PIXI.ENV.WEBGL_LEGACY;
     } catch {
       // 登録済み回避
     }
@@ -123,7 +125,10 @@ export const Live2DCanvas: React.FC<Live2DCanvasProps> = ({
         model.anchor.set(0.5, 0.5);
         model.position.set(app.screen.width / 2, app.screen.height / 2 + 50);
 
-        const scale = Math.min(app.screen.width / model.width, app.screen.height / model.height) * 0.85;
+        const mWidth = model.width > 0 ? model.width : 2000;
+        const mHeight = model.height > 0 ? model.height : 2000;
+        let scale = Math.min(app.screen.width / mWidth, app.screen.height / mHeight) * 0.85;
+        if (!isFinite(scale) || scale <= 0) scale = 0.25;
         model.scale.set(scale, scale);
 
         app.stage.addChild(model as any);
