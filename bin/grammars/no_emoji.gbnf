@@ -1,0 +1,4 @@
+# 絵文字および装飾記号を物理的に排除し、日本語・英数字・通常句読点のみを許可するGBNF文法
+root ::= valid-char+
+
+valid-char ::= [^\u1F600-\u1F64F\u1F300-\u1F5FF\u1F680-\u1F6FF\u2600-\u26FF\u2700-\u27BF\uFE00-\uFE0F\u1F900-\u1F9FF]
