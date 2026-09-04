@@ -262,7 +262,12 @@ export const Inspector: React.FC<InspectorProps> = ({ selectedNodeId }) => {
               <label className="text-[11px] text-zinc-400">レンダラー形式</label>
               <Select
                 value={char.avatarType || 'live2d'}
-                onValueChange={(v) => updateChar({ avatarType: v as any })}
+                onValueChange={(v: 'live2d' | 'vrm') =>
+                  updateChar({
+                    avatarType: v,
+                    vrmModelPath: char.vrmModelPath || '/vrm/Seed-san.vrm',
+                  })
+                }
               >
                 <SelectTrigger className="h-7 text-xs">
                   <SelectValue />

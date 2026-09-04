@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"os"
 	"os/exec"
 	"path/filepath"
 	"sync"
@@ -64,6 +65,13 @@ func (m *Manager) StartProcess(name string, exePath string, args []string, endpo
 	cmd.SysProcAttr = &syscall.SysProcAttr{
 		HideWindow:    true,
 		CreationFlags: 0x08000000, // CREATE_NO_WINDOW
+	}
+
+	// 外部プロセスの標準出力・エラー出力をログファイル (logs/<name>.log) に記録
+	_ = os.MkdirAll("logs", 0755)
+	if logFile, err := os.OpenFile(filepath.Join("logs", name+".log"), os.O_CREATE|os.O_WRONLY|os.O_TRUNC, 0644); err == nil {
+		cmd.Stdout = logFile
+		cmd.Stderr = logFile
 	}
 
 	if err := cmd.Start(); err != nil {

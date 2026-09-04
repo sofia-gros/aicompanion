@@ -201,9 +201,10 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAvatarType: (type) =>
     set((s) => ({
       avatarType: type,
+      vrmModelUrl: s.vrmModelUrl || '/vrm/Seed-san.vrm',
       logs: [...s.logs, `[Avatar] レンダラー切替: ${type.toUpperCase()}`],
     })),
-  setVrmModelUrl: (url) => set({ vrmModelUrl: url }),
+  setVrmModelUrl: (url) => set({ vrmModelUrl: url || '/vrm/Seed-san.vrm' }),
 
   selectCharacter: (id: string) => {
     const char = get().characters.find((c) => c.id === id);
@@ -212,7 +213,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       activeCharacterId: id,
       activeModelPath: char.modelPath,
       avatarType: char.avatarType || 'live2d',
-      vrmModelUrl: char.vrmModelPath || '/vrm/Seed-san.vrm',
+      vrmModelUrl: char.vrmModelPath || s.vrmModelUrl || '/vrm/Seed-san.vrm',
       config: {
         ...s.config,
         ttsEngine: char.ttsEngine,

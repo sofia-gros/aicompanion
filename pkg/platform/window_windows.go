@@ -33,3 +33,18 @@ func SetClickThrough(hwnd uintptr, enable bool) error {
 	setWindowLongPtr.Call(hwnd, index, newStyle)
 	return nil
 }
+
+// LaunchOverlayBrowser は指定されたURLをタイトルバーのない独立したEdge Appウィンドウ（または既定ブラウザ）として起動します。
+func LaunchOverlayBrowser(url string) error {
+	verbPtr, _ := windows.UTF16PtrFromString("open")
+	filePtr, _ := windows.UTF16PtrFromString("msedge.exe")
+	paramsPtr, _ := windows.UTF16PtrFromString("--app=" + url + " --window-size=450,700 --no-first-run")
+
+	err := windows.ShellExecute(0, verbPtr, filePtr, paramsPtr, nil, windows.SW_SHOWNORMAL)
+	if err != nil {
+		// Edge の起動に失敗した場合は、既定のブラウザでURLを開く
+		urlPtr, _ := windows.UTF16PtrFromString(url)
+		return windows.ShellExecute(0, verbPtr, urlPtr, nil, nil, windows.SW_SHOWNORMAL)
+	}
+	return nil
+}

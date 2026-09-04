@@ -211,7 +211,7 @@ export const Viewport: React.FC<ViewportProps> = ({ audioService }) => {
             />
           ) : (
             <VRMCanvas
-              modelUrl={vrmModelUrl}
+              modelUrl={vrmModelUrl || activeChar?.vrmModelPath || '/vrm/Seed-san.vrm'}
               audioService={audioService}
               sensitivity={config.lipSyncSensitivity}
               eyeSensitivity={config.eyeTrackingSensitivity}

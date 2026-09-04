@@ -224,10 +224,18 @@ func (a *App) ensureLLMServerWithModel(specifiedModel string) {
 	}
 
 	if modelPath != "" {
-		modelPath = filepath.Clean(modelPath)
+		if abs, err := filepath.Abs(modelPath); err == nil {
+			modelPath = abs
+		} else {
+			modelPath = filepath.Clean(modelPath)
+		}
 	}
 	if serverPath != "" {
-		serverPath = filepath.Clean(serverPath)
+		if abs, err := filepath.Abs(serverPath); err == nil {
+			serverPath = abs
+		} else {
+			serverPath = filepath.Clean(serverPath)
+		}
 	}
 
 	emitLog := func(msg string) {
@@ -365,11 +373,7 @@ func (a *App) SwitchDisplayMode(mode string) error {
 // LaunchOverlayWindow はStudioウィンドウとは独立した透過アバター別ウィンドウをデスクトップ上に起動します。
 func (a *App) LaunchOverlayWindow() error {
 	avatarURL := "http://127.0.0.1:18923/avatar.html"
-	if a.procManager != nil {
-		// Job Object の管理下で Edge App を起動（親プロセス終了時に確実に自動破棄）
-		return a.procManager.StartProcess("overlay_window", "msedge.exe", []string{"--app=" + avatarURL, "--window-size=450,700"}, "")
-	}
-	return nil
+	return platform.LaunchOverlayBrowser(avatarURL)
 }
 
 // SetClickThrough はマウス透過状態（WS_EX_TRANSPARENT）を切り替えます。
