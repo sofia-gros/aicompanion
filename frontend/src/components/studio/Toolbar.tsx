@@ -66,7 +66,7 @@ export const Toolbar: React.FC = () => {
   const hasDownloadedModel = downloadedModels.some((m) => m.endsWith('.gguf'));
 
   return (
-    <header className="h-11 bg-zinc-900 border-b border-zinc-800 flex items-center justify-between px-3 draggable-header z-30 select-none overflow-x-auto overflow-y-hidden no-scrollbar min-w-0">
+    <header className="h-10 bg-zinc-900 border-b border-zinc-800 flex flex-nowrap items-center justify-between px-2.5 draggable-header z-30 select-none overflow-x-auto overflow-y-hidden no-scrollbar min-w-0">
       <div className="flex items-center gap-2.5 shrink-0 no-drag">
         {/* ロゴ / タイトル */}
         <div className="flex items-center gap-1.5 pr-2 border-r border-zinc-700/60 shrink-0">
@@ -144,32 +144,21 @@ export const Toolbar: React.FC = () => {
               </SelectContent>
             </Select>
           </div>
-          {/* 新規キャラクター作成ボタン */}
-          <Button
-            size="xs"
-            variant="outline"
-            className="h-6 px-2 gap-1 text-[11px] font-medium border-indigo-600/60 text-indigo-300 hover:bg-indigo-950/50 hover:text-white whitespace-nowrap shrink-0"
-            onClick={() => setIsCharacterModalOpen(true)}
-            title="新しいキャラクターを作成・カスタマイズ"
-          >
-            <UserPlus className="w-3.5 h-3.5 shrink-0" />
-            <span>新規キャラ作成</span>
-          </Button>
         </div>
 
         {/* LLM Tier セレクター ＆ PCスペック自動推奨バッジ */}
         <div className="flex items-center gap-1 pl-2 border-l border-zinc-700/60 shrink-0">
           <span className="text-[11px] text-zinc-400 whitespace-nowrap">Tier:</span>
-          <div className="w-32 shrink-0">
+          <div className="w-28 shrink-0">
             <Select value={config.llmTier} onValueChange={handleTierChange}>
               <SelectTrigger className="h-6 text-[11px] whitespace-nowrap">
                 <SelectValue placeholder="Tier選択" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="tier0_5b">0.5B (超軽量 8GB)</SelectItem>
-                <SelectItem value="tier1_5b">1.5B (推奨 8GB)</SelectItem>
-                <SelectItem value="tier3b">3B (ミドルPC)</SelectItem>
-                <SelectItem value="tier7b">7B (ハイスペック)</SelectItem>
+                <SelectItem value="tier0_5b">0.5B (8GB)</SelectItem>
+                <SelectItem value="tier1_5b">1.5B (推奨)</SelectItem>
+                <SelectItem value="tier3b">3B (ミドル)</SelectItem>
+                <SelectItem value="tier7b">7B (高性能)</SelectItem>
                 <SelectItem value="cloud">クラウド API</SelectItem>
               </SelectContent>
             </Select>
@@ -186,12 +175,13 @@ export const Toolbar: React.FC = () => {
         </div>
       </div>
 
-      <div className="flex items-center gap-1.5 shrink-0 no-drag pl-2">
+      {/* 右側アクションボタン群 */}
+      <div className="flex items-center gap-1 shrink-0 no-drag pl-2">
         {/* モデル入手ボタン */}
         <Button
           size="xs"
           variant="outline"
-          className={`gap-1 text-[11px] whitespace-nowrap shrink-0 ${
+          className={`h-6 gap-1 text-[11px] whitespace-nowrap shrink-0 ${
             hasDownloadedModel
               ? 'text-emerald-300 border-emerald-700/60 hover:bg-emerald-950/40'
               : 'text-indigo-300 border-indigo-700/60 hover:bg-indigo-950/40'
@@ -204,31 +194,31 @@ export const Toolbar: React.FC = () => {
           ) : (
             <Download className="w-3 h-3 shrink-0" />
           )}
-          <span>{hasDownloadedModel ? 'モデル準備完了 ✓' : 'モデル入手'}</span>
+          <span>モデル入手</span>
         </Button>
 
-        {/* OBS URL コピーボタン */}
+        {/* OBS連携ボタン */}
         <Button
           size="xs"
           variant="outline"
-          className="gap-1 text-[11px] text-emerald-300 border-emerald-800/60 hover:bg-emerald-950/40 whitespace-nowrap shrink-0"
+          className="h-6 gap-1 text-[11px] text-emerald-300 border-emerald-800/60 hover:bg-emerald-950/40 whitespace-nowrap shrink-0"
           onClick={handleCopyObsUrl}
-          title="OBSのブラウザソースに追加するURLをコピー"
+          title="OBSのブラウザソース用URLをクリップボードにコピー"
         >
           <Radio className="w-3 h-3 shrink-0" />
-          <span>OBS用URL</span>
+          <span>OBS</span>
         </Button>
 
         {/* 独立常駐オーバーレイ起動ボタン */}
         <Button
           size="xs"
           variant="outline"
-          className="gap-1 text-[11px] text-zinc-200 border-zinc-700 hover:bg-zinc-800 whitespace-nowrap shrink-0"
+          className="h-6 gap-1 text-[11px] text-zinc-200 border-zinc-700 hover:bg-zinc-800 whitespace-nowrap shrink-0"
           onClick={() => WailsBridge.launchOverlayWindow()}
-          title="Studioウィンドウはそのままに、デスクトップ常駐用の透過アバター別ウィンドウを起動します"
+          title="デスクトップ常駐用の透過アバター別ウィンドウを起動します"
         >
           <ExternalLink className="w-3 h-3 text-indigo-400 shrink-0" />
-          <span>常駐オーバーレイ起動</span>
+          <span>常駐オーバーレイ</span>
         </Button>
       </div>
     </header>

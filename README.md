@@ -1,52 +1,52 @@
-# 🤖 AI Companion Studio (Desktop AI Companion)
+# AI Companion Studio (Desktop AI Companion)
 
 [![Go Version](https://img.shields.io/badge/Go-1.24+-00ADD8?style=flat&logo=go)](https://go.dev/)
 [![Wails v2](https://img.shields.io/badge/Wails-v2.11+-DF0000?style=flat)](https://wails.io/)
 [![React](https://img.shields.io/badge/React-18-61DAFB?style=flat&logo=react)](https://reactjs.org/)
 [![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-完全ローカル環境で動作する、プライバシー保護型の次世代デスクトップAIコンパニオン・スタジオです。  
+完全ローカル環境で動作する、プライバシー保護型のデスクトップ常駐型AIコンパニオン・開発スタジオです。  
 クラウドAPIに依存せず、PCローカル上で高速LLM推論（llama.cpp）、音声認識（STT）、音声合成（TTS）、Live2D/VRMアバター描画、および会話長期記憶（Pure-Go SQLite + ベクトル検索）がすべて完結します。
 
 ---
 
-## 📸 スクリーンショット (Screenshots)
+## スクリーンショット (Screenshots)
 
-### 🎨 Godot Engine 風 AI Companion Studio
-Live2D / VRM アバターの自由操作（右ドラッグ移動・ホイールズーム）、LINE/Discord風リッチチャット、手動モデル動作テストコントローラー、およびパフォーマンスモニターを完備。
+### AI Companion Studio メイン画面
+Live2D / VRM アバターの自由操作（ドラッグ移動・ホイールズーム）、吹き出しチャット履歴、手動モデル動作テストコントローラー、およびパフォーマンスモニターを統合したスタジオUI。
 
 ![AI Companion Studio](docs/screenshots/app_studio.png)
 
-### 📦 厳選ローカルLLMモデル・ダウンローダー
-Google Gemma 2、Meta Llama 3.2、Qwen 2.5、Phi-3.5 などの軽量・高性能GGUFモデルをワンクリックでダウンロード・自動起動。PCスペックに応じた推奨モデルを自動診断。
+### ローカルLLMモデル・ダウンローダー
+Google Gemma 2、Meta Llama 3.2、Qwen 2.5、Phi-3.5 などの軽量・高性能GGUFモデルをワンクリックでダウンロード・自動起動。PCスペックに応じた推奨モデルを自動判定します。
 
 ![Model Downloader](docs/screenshots/model_downloader.png)
 
 ---
 
-## ✨ 主な特徴 (Key Features)
+## 主な機能
 
-- **🔒 100% 完全ローカル完結・プライバシー保護**:
+- **完全ローカル実行・プライバシー保護**:
   - 会話内容や音声データは外部サーバーへ一切送信されず、完全にPC内で完結します。
-- **🎮 ゲームエンジン風 スタジオUI (Godot/Unity Style)**:
+- **ゲームエンジン風 スタジオUI (Godot / Unity スタイル)**:
   - **SceneTree (左ペイン)**: キャラクター階層、コンポーネントツリー、右クリックコンテキストメニュー（召喚・複製・書き出し・削除）。
-  - **Viewport (中央ペイン)**: Live2D / 3D VRMレンダラー切替、右ドラッグ位置移動、ホイールズーム（50%〜250%）、位置リセット、感情漫符オーバーレイ。
+  - **Viewport (中央ペイン)**: Live2D / 3D VRMレンダラー切替、ドラッグ位置移動、ホイールズーム（50%〜250%）、位置リセット、感情漫符オーバーレイ。
   - **Inspector (右ペイン)**: キャラクター性格・一人称/二人称・口調設定、TTS設定、手動モデル動作テスト（口開度・視線左右・表情プレビュー）。
   - **BottomPanel (下部ペイン)**: 吹き出しチャット履歴、音声ワンクリック再読み上げ（Replay）、プッシュ・トゥ・トーク（PTT: Space長押し）、コンソールログ、リアルタイム推論速度（Tok/s）計測。
-- **⚡ 超低遅延ストリーミング対話パイプライン**:
+- **超低遅延ストリーミング対話パイプライン**:
   - LLMのストリーミング出力をリアルタイムに句分割（Sentence Splitter）し、最初の1文が生成された瞬間に音声合成を開始（初声遅延 1秒未満）。
-- **🛡️ 堅牢な外部プロセス管理 (Windows Job Object)**:
-  - `llama-server.exe` などの推論プロセスを Windows Job Object に登録。親プロセスの終了やクラッシュ時も子プロセスの孤立（ゾンビ化）やポート衝突を完全根絶。
-  - GPUオフロード（`-ngl 99`）に標準対応し、圧倒的な推論速度を実現。
-- **🧠 ハイブリッド記憶システム (SQLite + インメモリベクトル検索)**:
-  - Cgo（外部Cコンパイラ）を一切要求しない Pure-Go SQLite を採用。
-  - 会話の要約記憶とコサイン類似度ベクトル検索により、過去の会話文脈を自然に引き継ぎ。
-- **🪟 デスクトップ常駐オーバーレイモード**:
+- **外部プロセス管理 (Windows Job Object)**:
+  - llama-server などの推論プロセスを Windows Job Object に登録。親プロセスの終了やクラッシュ時も子プロセスの孤立（ゾンビ化）やポート衝突を根絶。
+  - GPUオフロード（-ngl 99）に標準対応し、推論速度を最適化。
+- **ハイブリッド記憶システム (SQLite + インメモリベクトル検索)**:
+  - Cgo（外部Cコンパイラ）に依存しない Pure-Go SQLite を採用。
+  - 会話の要約記憶とコサイン類似度ベクトル検索により、過去の会話文脈を自然に引き継ぎます。
+- **デスクトップ常駐オーバーレイモード**:
   - 最前面透過ウィンドウ（クリック透過対応）により、PC作業中やゲーム中もデスクトップ上にアバターが常駐し、自発的に息抜きや応援の声をかけます。
 
 ---
 
-## 🏗️ システムアーキテクチャ (Architecture)
+## システムアーキテクチャ
 
 ```mermaid
 flowchart TB
@@ -58,14 +58,14 @@ flowchart TB
     end
 
     subgraph Backend["バックエンド (Go 1.24 + Wails v2)"]
-        Pipeline[対話オーケストレーター (Pipeline)]
-        Splitter[句分割エンジン (Sentence Splitter)]
+        Pipeline[対話オーケストレーター]
+        Splitter[句分割エンジン]
         ProcessMgr[プロセス管理者 (Windows Job Object)]
         MemStore[記憶エンジン (Pure-Go SQLite)]
     end
 
-    subgraph External["外部推論エンジン (Local Engine)"]
-        LLMServer["llama-server.exe (GGUF / GPUオフロード)"]
+    subgraph External["外部推論エンジン"]
+        LLMServer["llama-server (GGUF / GPUオフロード)"]
         TTS["Windows SAPI / VOICEVOX / SBV2"]
     end
 
@@ -81,7 +81,7 @@ flowchart TB
 
 ---
 
-## 💻 動作環境 (System Requirements)
+## 動作要件
 
 - **OS**: Windows 10 / 11 (64-bit)
 - **CPU**: Intel Core i5 / AMD Ryzen 5 以上
@@ -94,7 +94,7 @@ flowchart TB
 
 ---
 
-## 🚀 ビルド ＆ 起動方法 (Quick Start)
+## ビルド・起動方法
 
 ### 1. リポジトリのクローン
 ```bash
@@ -104,7 +104,6 @@ cd aicompanion
 
 ### 2. 依存関係のインストール
 ```bash
-# フロントエンド依存ライブラリのインストール
 cd frontend
 npm install
 cd ..
@@ -123,30 +122,30 @@ wails build
 
 ---
 
-## 📖 使い方 (Usage Guide)
+## 使い方
 
 1. **モデルの準備**:
    - アプリ起動後、上部ツールバーの **「モデル入手」** をクリックします。
    - お使いのPCスペックに合わせた推奨モデル（例: Qwen 2.5 0.5B / 1.5B、Google Gemma 2 2B など）をワンクリックでダウンロードできます。
 2. **キャラクターのカスタマイズ**:
-   - 左側の **SceneTree** からキャラクター（ひより、アカリ、ルミなど）を選択します。
+   - 左側の **SceneTree** からキャラクターを選択します。
    - 右側の **Inspector** で名前、一人称、二人称、口調、TTS音声エンジン（Windows標準 Haruka / VOICEVOXなど）を自由に設定できます。
 3. **対話テスト**:
    - 下部の **「対話テスト」** タブでメッセージを入力して送信、またはマイクボタンで音声対話を行います。
    - **プッシュ・トゥ・トーク (PTT)** を有効にすると、`Space` キーを押している間だけマイクが有効になり、離すと即時送信されます。
-   - キャラクターの過去の発言横にある **「🔊」** ボタンを押すと、いつでも音声を再再生できます。
+   - キャラクターの過去の発言横にある **「再読み上げ」** ボタンを押すと、いつでも音声を再再生できます。
 4. **常駐モード**:
-   - ツールバーの **「常駐オーバーレイ起動」** をクリックすると、独立した透過ウィンドウで画面の隅にアバターを常駐させることができます。
+   - ツールバーの **「常駐オーバーレイ」** をクリックすると、独立した透過ウィンドウで画面の隅にアバターを常駐させることができます。
 
 ---
 
-## 📜 ライセンス (License)
+## ライセンス
 
 本プロジェクトは [MIT License](LICENSE) のもとで公開されています。
 
 ---
 
-## 🙏 謝辞 (Credits)
+## 謝辞
 
 - [llama.cpp](https://github.com/ggml-org/llama.cpp) by Georgi Gerganov
 - [Wails](https://wails.io/) by Lea Anthony

@@ -19,6 +19,8 @@ func main() {
 		Title:            "Desktop AI Companion Studio",
 		Width:            1280,
 		Height:           800,
+		MinWidth:         1024,
+		MinHeight:        650,
 		Frameless:        false, // 初期起動時はStudioモード（通常枠）
 		BackgroundColour: &options.RGBA{R: 18, G: 18, B: 24, A: 255},
 		AssetServer: &assetserver.Options{
