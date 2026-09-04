@@ -8,6 +8,7 @@ import { BottomPanel } from './components/studio/BottomPanel';
 import { ModelDownloaderModal } from './components/studio/ModelDownloaderModal';
 import { CharacterModal } from './components/studio/CharacterModal';
 import { SettingsModal } from './components/studio/SettingsModal';
+import { DesktopOverlay } from './components/studio/DesktopOverlay';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { AudioService } from './services/audioService';
 import { WailsBridge } from './services/wailsBridge';
@@ -43,6 +44,8 @@ export const App: React.FC = () => {
     addChatMessage,
     addLog,
     setSearchConfig,
+    config,
+    updateConfig,
   } = useAppStore();
 
   const activeChar = characters.find((c) => c.id === activeCharacterId) || characters[0];
@@ -174,6 +177,9 @@ export const App: React.FC = () => {
           addLog(`[System] 実機推論モデル準備完了: ${status.model}`);
         }
       },
+      onDisplayModeChanged: (mode) => {
+        updateConfig({ displayMode: mode });
+      },
     });
 
     return () => {
@@ -192,6 +198,15 @@ export const App: React.FC = () => {
     await WailsBridge.cancelModelDownload();
     setDownloadProgress(null);
   };
+
+  // デスクトップ常駐全画面透過オーバーレイモードの場合
+  if (config.displayMode === 'overlay') {
+    return (
+      <ErrorBoundary>
+        <DesktopOverlay audioService={audioServiceRef.current!} />
+      </ErrorBoundary>
+    );
+  }
 
   return (
     <ErrorBoundary>

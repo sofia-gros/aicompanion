@@ -224,13 +224,13 @@ export const Toolbar: React.FC = () => {
           <span>OBS</span>
         </Button>
 
-        {/* 独立常駐オーバーレイ起動ボタン */}
+        {/* デスクトップ常駐オーバーレイ切り替えボタン */}
         <Button
           size="xs"
           variant="outline"
           className="h-6 gap-1 text-[11px] text-zinc-200 border-zinc-700 hover:bg-zinc-800 whitespace-nowrap shrink-0"
-          onClick={() => WailsBridge.launchOverlayWindow()}
-          title="デスクトップ常駐用の透過アバター別ウィンドウを起動します"
+          onClick={() => WailsBridge.switchDisplayMode('overlay')}
+          title="デスクトップ常駐用の透過全画面オーバーレイに切り替えます（Escキーまたは画面端のボタンでStudioに復帰）"
         >
           <ExternalLink className="w-3 h-3 text-indigo-400 shrink-0" />
           <span>常駐オーバーレイ</span>

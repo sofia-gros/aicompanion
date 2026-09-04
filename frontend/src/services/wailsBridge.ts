@@ -53,14 +53,21 @@ export class WailsBridge {
   }
 
   /**
-   * 独立した透過アバター常駐別ウィンドウを立ち上げます。
+   * Studioモードと全画面透過常駐オーバーレイモードを切り替えます。
+   */
+  public static async switchDisplayMode(mode: 'studio' | 'overlay'): Promise<void> {
+    if (this.isWails() && (window.go?.main?.App as any)?.SwitchDisplayMode) {
+      await (window.go?.main?.App as any).SwitchDisplayMode(mode);
+    } else {
+      console.log('[Dev/Mock] switchDisplayMode:', mode);
+    }
+  }
+
+  /**
+   * デスクトップ常駐透過オーバーレイモードに切り替えます。
    */
   public static async launchOverlayWindow(): Promise<void> {
-    if (this.isWails() && (window.go?.main?.App as any)?.LaunchOverlayWindow) {
-      await (window.go?.main?.App as any).LaunchOverlayWindow();
-    } else {
-      window.open('/avatar.html', '_blank', 'width=450,height=700,menubar=no,toolbar=no');
-    }
+    await this.switchDisplayMode('overlay');
   }
 
   /**
@@ -172,14 +179,6 @@ export class WailsBridge {
     return 'models';
   }
 
-  /**
-   * 表示モード（studio / overlay）を切り替えます。
-   */
-  public static async switchDisplayMode(mode: string): Promise<void> {
-    if (this.isWails() && window.go?.main?.App?.SwitchDisplayMode) {
-      await window.go.main.App.SwitchDisplayMode(mode);
-    }
-  }
 
   /**
    * マウス透過を切り替えます。
@@ -303,6 +302,7 @@ export class WailsBridge {
       onDownloadedModelsUpdated?: (models: string[]) => void;
       onSystemLog?: (msg: string) => void;
       onSystemStatus?: (status: any) => void;
+      onDisplayModeChanged?: (mode: 'studio' | 'overlay') => void;
     }
   ): () => void {
     if (!this.isWails() || !window.runtime) {
@@ -326,6 +326,9 @@ export class WailsBridge {
     }
     if (handlers.onSystemStatus) {
       window.runtime.EventsOn('system-status', handlers.onSystemStatus);
+    }
+    if (handlers.onDisplayModeChanged) {
+      window.runtime.EventsOn('display-mode-changed', handlers.onDisplayModeChanged);
     }
 
     return () => {

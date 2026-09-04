@@ -13,6 +13,10 @@ import {
   HardDrive,
   Database,
   Gauge,
+  Copy,
+  Check,
+  Search,
+  ArrowDown,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useAppStore, ChatMessage } from '../../stores/useAppStore';
@@ -24,6 +28,8 @@ interface BottomPanelProps {
   audioService: AudioService;
 }
 
+type LogCategory = 'all' | 'llm' | 'search' | 'voice' | 'error' | 'system';
+
 /**
  * Godot Engine 風の下部パネル（リッチ対話テストチャット、PTT、コンソールログ、パフォーマンスモニター）
  */
@@ -31,6 +37,14 @@ export const BottomPanel: React.FC<BottomPanelProps> = ({ audioService }) => {
   const [activeTab, setActiveTab] = useState<'chat' | 'console' | 'perf'>('chat');
   const [inputMessage, setInputMessage] = useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const consoleBottomRef = useRef<HTMLDivElement>(null);
+
+  // コンソール用フィルター・検索ステート
+  const [logCategory, setLogCategory] = useState<LogCategory>('all');
+  const [logSearchQuery, setLogSearchQuery] = useState('');
+  const [isAutoScroll, setIsAutoScroll] = useState(true);
+  const [copiedLogIndex, setCopiedLogIndex] = useState<number | null>(null);
+  const [isAllCopied, setIsAllCopied] = useState(false);
 
   const {
     characters,
@@ -49,6 +63,7 @@ export const BottomPanel: React.FC<BottomPanelProps> = ({ audioService }) => {
     addChatMessage,
     clearChatMessages,
     addLog,
+    clearLogs,
   } = useAppStore();
 
   // パフォーマンス表示時の定期リソース取得 (2秒おき)
@@ -72,6 +87,54 @@ export const BottomPanel: React.FC<BottomPanelProps> = ({ audioService }) => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
+
+  // コンソールログ更新時の自動スクロール
+  useEffect(() => {
+    if (activeTab === 'console' && isAutoScroll) {
+      consoleBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [logs, activeTab, isAutoScroll]);
+
+  // ログフィルタリング条件判定
+  const filterLog = (log: string) => {
+    if (logSearchQuery && !log.toLowerCase().includes(logSearchQuery.toLowerCase())) {
+      return false;
+    }
+    if (logCategory === 'all') return true;
+    const l = log.toLowerCase();
+    if (logCategory === 'llm') {
+      return l.includes('思考') || l.includes('llm') || l.includes('推論') || l.includes('トークン');
+    }
+    if (logCategory === 'search') {
+      return l.includes('検索') || l.includes('web') || l.includes('判定') || l.includes('wikipedia') || l.includes('duckduckgo') || l.includes('tavily');
+    }
+    if (logCategory === 'voice') {
+      return l.includes('tts') || l.includes('voice') || l.includes('音声') || l.includes('stt') || l.includes('マイク') || l.includes('ptt');
+    }
+    if (logCategory === 'error') {
+      return l.includes('エラー') || l.includes('失敗') || l.includes('警告') || l.includes('error') || l.includes('warn');
+    }
+    if (logCategory === 'system') {
+      return l.includes('system') || l.includes('設定') || l.includes('downloader') || l.includes('起動') || l.includes('モデル') || l.includes('スペック');
+    }
+    return true;
+  };
+
+  // 全ログ一括コピー
+  const handleCopyAllLogs = () => {
+    const filtered = logs.filter(filterLog);
+    const textToCopy = filtered.join('\n');
+    navigator.clipboard.writeText(textToCopy);
+    setIsAllCopied(true);
+    setTimeout(() => setIsAllCopied(false), 2000);
+  };
+
+  // 1行個別コピー
+  const handleCopySingleLog = (logText: string, index: number) => {
+    navigator.clipboard.writeText(logText);
+    setCopiedLogIndex(index);
+    setTimeout(() => setCopiedLogIndex(null), 2000);
+  };
 
   useEffect(() => {
     speechServiceRef.current = new SpeechService(
@@ -249,7 +312,7 @@ export const BottomPanel: React.FC<BottomPanelProps> = ({ audioService }) => {
         {activeTab === 'chat' && (
           <form onSubmit={handleSend} className="flex-1 flex flex-col justify-between gap-2 overflow-hidden">
             {/* チャットメッセージ履歴（吹き出しUI） */}
-            <div className="flex-1 overflow-y-auto space-y-2 p-2 bg-zinc-950/60 rounded border border-zinc-800/80 text-xs">
+            <div className="flex-1 overflow-y-auto space-y-2 p-2 bg-zinc-950/60 rounded border border-zinc-800/80 text-xs select-text">
               {chatMessages.length === 0 ? (
                 <p className="text-zinc-500 text-center py-4">メッセージを入力して会話を始めましょう</p>
               ) : (
@@ -344,69 +407,198 @@ export const BottomPanel: React.FC<BottomPanelProps> = ({ audioService }) => {
           </form>
         )}
 
-        {/* ==================== 2. コンソールログ ==================== */}
+        {/* ==================== 2. コンソールログ (高機能・コピペ対応) ==================== */}
         {activeTab === 'console' && (
-          <div className="flex-1 flex flex-col gap-1 overflow-hidden">
-            <div className="flex justify-between items-center text-[10px] text-zinc-500 px-1">
-              <span>システム実行ログ</span>
-              <button
-                onClick={async () => {
-                  await WailsBridge.clearConversationHistory();
-                  clearChatMessages();
-                  addLog('[System] 会話記憶データベースを初期化しました');
-                }}
-                className="hover:text-rose-400 cursor-pointer flex items-center gap-1 transition-colors"
-                title="保存されている会話記憶をリセット"
-              >
-                <Trash2 className="w-3 h-3" />
-                <span>記憶消去</span>
-              </button>
-            </div>
-            <div className="flex-1 overflow-y-auto font-mono text-[11px] text-zinc-300 space-y-1 p-2 bg-zinc-950 rounded border border-zinc-800">
-              {logs.map((log, i) => {
-                // Gemini風タグ [タグ名] の検出
-                const match = log.match(/^(\[\d{1,2}:\d{2}:\d{2}\])?\s*\[([^\]]+)\](.*)$/);
-                if (match) {
-                  const timestamp = match[1] || '';
-                  const tag = match[2];
-                  const content = match[3];
+          <div className="flex-1 flex flex-col gap-1.5 overflow-hidden">
+            {/* ログコントロールヘッダーツールバー */}
+            <div className="flex flex-wrap items-center justify-between gap-1.5 px-1 py-0.5 border-b border-zinc-800 shrink-0">
+              {/* カテゴリーフィルターボタン群 */}
+              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                {(
+                  [
+                    { id: 'all', label: 'すべて' },
+                    { id: 'llm', label: 'LLM思考' },
+                    { id: 'search', label: 'Web検索' },
+                    { id: 'voice', label: '音声TTS' },
+                    { id: 'error', label: 'エラー/警告' },
+                    { id: 'system', label: 'システム' },
+                  ] as const
+                ).map((cat) => (
+                  <button
+                    key={cat.id}
+                    onClick={() => setLogCategory(cat.id)}
+                    className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+                      logCategory === cat.id
+                        ? 'bg-indigo-600 text-white shadow-sm'
+                        : 'bg-zinc-800/80 text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {cat.label}
+                  </button>
+                ))}
+              </div>
 
-                  let tagStyle = 'bg-zinc-800 text-zinc-300 border-zinc-700';
-                  if (tag.includes('思考')) {
-                    tagStyle = 'bg-purple-950/80 text-purple-300 border-purple-800/80';
-                  } else if (tag.includes('判定')) {
-                    tagStyle = 'bg-sky-950/80 text-sky-300 border-sky-800/80';
-                  } else if (tag.includes('実行')) {
-                    tagStyle = 'bg-amber-950/80 text-amber-300 border-amber-800/80';
-                  } else if (tag.includes('取得')) {
-                    tagStyle = 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80';
-                  } else if (tag.includes('解析')) {
-                    tagStyle = 'bg-teal-950/80 text-teal-300 border-teal-800/80';
-                  } else if (tag.includes('生成')) {
-                    tagStyle = 'bg-indigo-950/80 text-indigo-300 border-indigo-800/80';
-                  } else if (tag.includes('エラー') || tag.includes('失敗')) {
-                    tagStyle = 'bg-rose-950/80 text-rose-300 border-rose-800/80';
-                  } else if (tag.includes('警告')) {
-                    tagStyle = 'bg-yellow-950/80 text-yellow-300 border-yellow-800/80';
+              {/* 右側アクション（検索、オートスクロール、全コピー、クリア） */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* ログ検索入力 */}
+                <div className="relative flex items-center">
+                  <Search className="w-3 h-3 text-zinc-500 absolute left-2 pointer-events-none" />
+                  <input
+                    type="text"
+                    value={logSearchQuery}
+                    onChange={(e) => setLogSearchQuery(e.target.value)}
+                    placeholder="ログを検索..."
+                    className="h-5 pl-6 pr-2 bg-zinc-950 border border-zinc-700/80 rounded text-[10px] text-zinc-200 placeholder:text-zinc-500 focus:outline-none focus:border-indigo-500 w-28"
+                  />
+                </div>
+
+                {/* 自動スクロール追従トグル */}
+                <button
+                  onClick={() => setIsAutoScroll(!isAutoScroll)}
+                  className={`p-1 rounded text-[10px] flex items-center gap-0.5 transition-colors cursor-pointer border ${
+                    isAutoScroll
+                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80'
+                      : 'bg-zinc-800 text-zinc-400 border-zinc-700'
+                  }`}
+                  title={isAutoScroll ? '自動スクロール有効中 (クリックで固定)' : '自動スクロール無効中 (クリックで追従)'}
+                >
+                  <ArrowDown className="w-3 h-3" />
+                  <span>追従</span>
+                </button>
+
+                {/* 全ログコピー */}
+                <button
+                  onClick={handleCopyAllLogs}
+                  className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-[10px] flex items-center gap-1 transition-colors cursor-pointer border border-zinc-700"
+                  title="表示中の全ログをクリップボードにコピー"
+                >
+                  {isAllCopied ? <Check className="w-3 h-3 text-emerald-400" /> : <Copy className="w-3 h-3" />}
+                  <span>{isAllCopied ? 'コピー完了' : '全コピー'}</span>
+                </button>
+
+                {/* ログ消去 */}
+                <button
+                  onClick={clearLogs}
+                  className="p-1 rounded bg-zinc-800 hover:bg-rose-950 text-zinc-400 hover:text-rose-300 transition-colors cursor-pointer border border-zinc-700"
+                  title="コンソールログ画面をクリア"
+                >
+                  <Trash2 className="w-3 h-3" />
+                </button>
+              </div>
+            </div>
+
+            {/* ログ一覧表示エリア (テキスト選択・ドラッグコピー完全対応) */}
+            <div className="flex-1 overflow-y-auto font-mono text-[11px] space-y-0.5 p-2 bg-zinc-950 rounded border border-zinc-800/80 select-text">
+              {logs.filter(filterLog).length === 0 ? (
+                <div className="text-zinc-500 text-center py-8 text-xs select-none">
+                  該当するログメッセージはありません
+                </div>
+              ) : (
+                logs.filter(filterLog).map((log, i) => {
+                  const match = log.match(/^(\[\d{1,2}:\d{2}:\d{2}\])?\s*\[([^\]]+)\](.*)$/);
+                  if (match) {
+                    const timestamp = match[1] || '';
+                    const tag = match[2];
+                    const content = match[3];
+
+                    let tagStyle = 'bg-zinc-800 text-zinc-300 border-zinc-700';
+                    let contentStyle = 'text-zinc-200';
+
+                    if (tag.includes('思考') || tag.includes('LLM')) {
+                      tagStyle = 'bg-purple-950/80 text-purple-300 border-purple-800/80';
+                      contentStyle = 'text-purple-200';
+                    } else if (tag.includes('判定')) {
+                      tagStyle = 'bg-sky-950/80 text-sky-300 border-sky-800/80';
+                      contentStyle = 'text-sky-200';
+                    } else if (tag.includes('実行') || tag.includes('検索')) {
+                      tagStyle = 'bg-emerald-950/80 text-emerald-300 border-emerald-800/80';
+                      contentStyle = 'text-emerald-200';
+                    } else if (tag.includes('取得') || tag.includes('解析')) {
+                      tagStyle = 'bg-teal-950/80 text-teal-300 border-teal-800/80';
+                      contentStyle = 'text-teal-200';
+                    } else if (tag.includes('音声') || tag.includes('TTS') || tag.includes('Voice')) {
+                      tagStyle = 'bg-amber-950/80 text-amber-300 border-amber-800/80';
+                      contentStyle = 'text-amber-200';
+                    } else if (tag.includes('エラー') || tag.includes('失敗') || tag.includes('Error')) {
+                      tagStyle = 'bg-rose-950/90 text-rose-300 border-rose-700';
+                      contentStyle = 'text-rose-300 font-semibold';
+                    } else if (tag.includes('警告') || tag.includes('Warn')) {
+                      tagStyle = 'bg-yellow-950/80 text-yellow-300 border-yellow-700';
+                      contentStyle = 'text-yellow-200';
+                    } else if (tag.includes('System') || tag.includes('設定')) {
+                      tagStyle = 'bg-blue-950/80 text-blue-300 border-blue-800/80';
+                      contentStyle = 'text-blue-200';
+                    }
+
+                    return (
+                      <div
+                        key={i}
+                        className="group flex items-start justify-between gap-1.5 py-0.5 px-1.5 rounded hover:bg-zinc-900 transition-colors"
+                      >
+                        <div className="flex items-start gap-2 break-all flex-1 min-w-0">
+                          {/* 行番号 */}
+                          <span className="text-[10px] text-zinc-600 select-none shrink-0 w-6 text-right font-mono">
+                            {i + 1}
+                          </span>
+                          {/* タイムスタンプ */}
+                          {timestamp && (
+                            <span className="text-[10px] text-zinc-500 shrink-0 select-none font-mono">
+                              {timestamp}
+                            </span>
+                          )}
+                          {/* カテゴリバッジ */}
+                          <span className={`px-1.5 py-0.2 rounded border text-[10px] font-semibold shrink-0 select-none ${tagStyle}`}>
+                            {tag}
+                          </span>
+                          {/* ログメッセージ本文 */}
+                          <span className={`leading-relaxed select-text ${contentStyle}`}>
+                            {content}
+                          </span>
+                        </div>
+
+                        {/* ホバー時のみ現れる1行コピーボタン */}
+                        <button
+                          onClick={() => handleCopySingleLog(log, i)}
+                          className="opacity-0 group-hover:opacity-100 p-1 rounded bg-zinc-800 hover:bg-indigo-600 text-zinc-400 hover:text-white transition-opacity shrink-0 cursor-pointer"
+                          title="この行をコピー"
+                        >
+                          {copiedLogIndex === i ? (
+                            <Check className="w-2.5 h-2.5 text-emerald-300" />
+                          ) : (
+                            <Copy className="w-2.5 h-2.5" />
+                          )}
+                        </button>
+                      </div>
+                    );
                   }
 
                   return (
-                    <div key={i} className="leading-relaxed flex items-start space-x-1.5 break-all">
-                      {timestamp && <span className="text-[10px] text-zinc-500 shrink-0 select-none">{timestamp}</span>}
-                      <span className={`px-1.5 py-0.2 rounded border text-[10px] font-semibold shrink-0 select-none ${tagStyle}`}>
-                        {tag}
-                      </span>
-                      <span className="text-zinc-200">{content}</span>
+                    <div
+                      key={i}
+                      className="group flex items-start justify-between gap-1.5 py-0.5 px-1.5 rounded hover:bg-zinc-900 text-zinc-400 transition-colors"
+                    >
+                      <div className="flex items-start gap-2 break-all flex-1 min-w-0">
+                        <span className="text-[10px] text-zinc-600 select-none shrink-0 w-6 text-right font-mono">
+                          {i + 1}
+                        </span>
+                        <span className="leading-relaxed select-text">{log}</span>
+                      </div>
+                      <button
+                        onClick={() => handleCopySingleLog(log, i)}
+                        className="opacity-0 group-hover:opacity-100 p-1 rounded bg-zinc-800 hover:bg-indigo-600 text-zinc-400 hover:text-white transition-opacity shrink-0 cursor-pointer"
+                        title="この行をコピー"
+                      >
+                        {copiedLogIndex === i ? (
+                          <Check className="w-2.5 h-2.5 text-emerald-300" />
+                        ) : (
+                          <Copy className="w-2.5 h-2.5" />
+                        )}
+                      </button>
                     </div>
                   );
-                }
-
-                return (
-                  <div key={i} className="leading-relaxed text-zinc-400">
-                    {log}
-                  </div>
-                );
-              })}
+                })
+              )}
+              <div ref={consoleBottomRef} />
             </div>
           </div>
         )}

@@ -106,6 +106,7 @@ interface AppState {
   setTestParamEye: (val: number) => void;
   setMetrics: (tokSec: number, latency: number) => void;
   addLog: (msg: string) => void;
+  clearLogs: () => void;
   addChatMessage: (msg: ChatMessage) => void;
   clearChatMessages: () => void;
 }
@@ -148,7 +149,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   isMicListening: false,
   currentEmotion: 'neutral',
 
-  isServicesRunning: true,
+  isServicesRunning: false,
   downloadedModels: [],
   activeModelFileName: '',
   systemSpec: null,
@@ -381,6 +382,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({
       logs: [...s.logs.slice(-99), `[${new Date().toLocaleTimeString()}] ${msg}`],
     })),
+  clearLogs: () => set({ logs: [] }),
   chatMessages: [
     {
       id: 'welcome',

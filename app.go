@@ -124,6 +124,10 @@ func NewApp() *App {
 // startup はWails起動時に呼び出され、コンテキスト保持とサーバー開始を行います。
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	// 起動直後はLLM準備中のためオフ状態をフロントエンドに明示送出
+	runtime.EventsEmit(a.ctx, "system-status", map[string]interface{}{
+		"llmReady": false,
+	})
 	_ = a.httpServer.Start()
 	go a.ensureLLMServer()
 	go a.ensureClassifierServerWithModel(a.config.ClassifierModel)
@@ -303,7 +307,7 @@ func (a *App) ensureLLMServerWithModel(specifiedModel string) {
 			_ = resp.Body.Close()
 			// 実機推論モードへ切り替え
 			a.pipeline.SetMockMode(false)
-			emitLog(fmt.Sprintf("[LLM] 推論サーバー稼働開始 (モデル: %s, ポート: 8080)", filepath.Base(modelPath)))
+			emitLog(fmt.Sprintf("[System] AI推論サーバーの準備が完了しました (モデル: %s, ポート: 8080)。対話可能です。", filepath.Base(modelPath)))
 			if a.ctx != nil {
 				runtime.EventsEmit(a.ctx, "system-status", map[string]interface{}{
 					"llmReady": true,
@@ -649,19 +653,37 @@ func (a *App) SaveSearchConfig(cfg websearch.SearchConfig) error {
 	return nil
 }
 
-// SwitchDisplayMode はスタジオ画面の表示モード設定を更新します（ウィンドウサイズは変更しません）。
+// SwitchDisplayMode はStudioモードと全画面透過・フレームレス常駐オーバーレイモードを切り替えます。
 func (a *App) SwitchDisplayMode(mode string) error {
 	a.mutex.Lock()
-	defer a.mutex.Unlock()
-
 	a.config.DisplayMode = mode
+	a.mutex.Unlock()
+
+	if a.ctx != nil {
+		if mode == "overlay" {
+			// 常駐オーバーレイモード: 最前面固定、背景透過、全画面フルスクリーン
+			runtime.WindowSetAlwaysOnTop(a.ctx, true)
+			runtime.WindowSetBackgroundColour(a.ctx, 0, 0, 0, 0)
+			runtime.WindowFullscreen(a.ctx)
+			runtime.EventsEmit(a.ctx, "display-mode-changed", "overlay")
+			runtime.EventsEmit(a.ctx, "system-log", "[表示モード] デスクトップ常駐オーバーレイモードに切り替えました (EscキーでStudioに復帰)")
+		} else {
+			// Studioモード: フルスクリーン解除、最前面解除、スタジオ背景色、1280x800サイズ、中央配置
+			runtime.WindowUnfullscreen(a.ctx)
+			runtime.WindowSetAlwaysOnTop(a.ctx, false)
+			runtime.WindowSetBackgroundColour(a.ctx, 18, 18, 24, 255)
+			runtime.WindowSetSize(a.ctx, 1280, 800)
+			runtime.WindowCenter(a.ctx)
+			runtime.EventsEmit(a.ctx, "display-mode-changed", "studio")
+			runtime.EventsEmit(a.ctx, "system-log", "[表示モード] AI Companion Studioモードに復帰しました")
+		}
+	}
 	return nil
 }
 
-// LaunchOverlayWindow はStudioウィンドウとは独立した透過アバター別ウィンドウをデスクトップ上に起動します。
+// LaunchOverlayWindow はStudioウィンドウをデスクトップ常駐透過オーバーレイモードに切り替えます。
 func (a *App) LaunchOverlayWindow() error {
-	avatarURL := "http://127.0.0.1:18923/avatar.html"
-	return platform.LaunchOverlayBrowser(avatarURL)
+	return a.SwitchDisplayMode("overlay")
 }
 
 // SetClickThrough はマウス透過状態（WS_EX_TRANSPARENT）を切り替えます。
