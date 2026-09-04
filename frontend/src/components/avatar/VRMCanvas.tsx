@@ -40,23 +40,26 @@ export const VRMCanvas: React.FC<VRMCanvasProps> = ({
     // 1. シーン・カメラ・レンダラー初期化
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(30.0, width / height, 0.1, 20.0);
-    camera.position.set(0.0, 1.4, 1.2);
+    camera.position.set(0.0, 1.35, 1.05); // バストアップ（顔〜胸元）が美しく映る構図
+    camera.lookAt(0.0, 1.35, 0.0);
 
     const renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
     renderer.setSize(width, height);
     renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
     containerRef.current.appendChild(renderer.domElement);
 
     // 2. ライティング
     const light = new THREE.DirectionalLight(0xffffff, Math.PI);
-    light.position.set(1.0, 1.0, 1.0).normalize();
+    light.position.set(1.0, 1.5, 1.0).normalize();
     scene.add(light);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.5 * Math.PI);
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.7 * Math.PI);
     scene.add(ambientLight);
 
     // 3. VRM ロード
     if (modelUrl) {
+      console.log('[VRM] Loading model from URL:', modelUrl);
       const loader = new GLTFLoader();
       loader.register((parser) => new VRMLoaderPlugin(parser));
 
@@ -67,11 +70,12 @@ export const VRMCanvas: React.FC<VRMCanvasProps> = ({
           VRMUtils.removeUnnecessaryVertices(gltf.scene);
           VRMUtils.removeUnnecessaryJoints(gltf.scene);
 
-          // モデル向き補正
-          vrm.scene.rotation.y = Math.PI;
+          // モデル向き補正 (正面向き)
+          vrm.scene.rotation.y = 0;
           scene.add(vrm.scene);
           vrmRef.current = vrm;
           setLoadError(null);
+          console.log('[VRM] Model loaded successfully:', modelUrl);
         },
         undefined,
         (err) => {
@@ -81,20 +85,35 @@ export const VRMCanvas: React.FC<VRMCanvasProps> = ({
       );
     }
 
-    // 4. アニメーション＆リップシンク・視線追従ループ
+    // 4. アニメーション＆リップシンク・視線追従・呼吸・瞬きループ
     let animFrameId: number;
     const clock = new THREE.Clock();
 
     const animate = () => {
       animFrameId = requestAnimationFrame(animate);
       const delta = clock.getDelta();
+      const elapsed = clock.getElapsedTime();
 
       if (vrmRef.current) {
-        // リップシンク
+        // リップシンク (発話音声ボリュームに連動)
         const mouthOpen = audioService.getMouthOpen(sensitivityRef.current);
         if (vrmRef.current.expressionManager) {
           vrmRef.current.expressionManager.setValue('aa', mouthOpen);
+
+          // 自然な瞬き (約3.5秒周期で滑らかにまばたき)
+          const blinkPhase = elapsed % 3.5;
+          const blinkVal = blinkPhase > 3.3 ? Math.sin(((blinkPhase - 3.3) / 0.2) * Math.PI) : 0;
+          vrmRef.current.expressionManager.setValue('blink', blinkVal);
         }
+
+        // 自然な呼吸・アイドリング (胸ボーンのサイン波微小回転)
+        if (vrmRef.current.humanoid) {
+          const chest = vrmRef.current.humanoid.getNormalizedBoneNode('chest');
+          if (chest) {
+            chest.rotation.x = Math.sin(elapsed * 2.0) * 0.02;
+          }
+        }
+
         vrmRef.current.update(delta);
       }
 

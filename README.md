@@ -22,17 +22,22 @@
 
 ![Desktop Overlay](docs/screenshots/desktop_overlay.png)
 
-### 3. ローカルLLMモデル入手・管理
+### 3. 透過アバターウィンドウ (単体表示)
+背景完全透過かつクリック透過に対応。自由な位置へ配置でき、吹き出し字幕とリップシンク音声が連動します。
+
+![Avatar Window](docs/screenshots/avatar_window.png)
+
+### 4. ローカルLLMモデル入手・管理
 Google Gemma 4、Meta Llama 3.2、Qwen 2.5、Phi-3.5 等の軽量・高性能GGUFモデルをワンクリックで導入。PCスペック（RAM / GPU）を自動診断し、最適なモデルを推奨します。
 
 ![Model Downloader](docs/screenshots/model_downloader.png)
 
-### 4. キャラクター作成・プロファイル設定
+### 5. キャラクター作成・プロファイル設定
 キャラクターの見た目（Live2D / VRM）、名前、性格、口調ルール、一人称・二人称、音声エンジン（Windows標準 Haruka / VOICEVOX）をノーコードで直感的にカスタマイズ・保存できます。
 
 ![Character Customizer](docs/screenshots/character_customizer.png)
 
-### 5. 3D (VRM) レンダラーモード
+### 6. 3D (VRM) レンダラーモード
 Live2Dに加えてThree.jsによるVRM 3Dアバターの描画・リップシンクにも完全対応。ワンクリックで2D / 3Dを瞬時に切り替え可能です。
 
 ![VRM 3D Mode](docs/screenshots/vrm_3d_mode.png)

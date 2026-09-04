@@ -108,7 +108,7 @@ export const useAppStore = create<AppState>((set, get) => ({
   activeCharacterId: 'hiyori',
   activeModelPath: DEFAULT_CHARACTERS[0].modelPath,
   avatarType: 'live2d',
-  vrmModelUrl: '',
+  vrmModelUrl: DEFAULT_CHARACTERS[0].vrmModelPath || '/vrm/Seed-san.vrm',
   isCharacterModalOpen: false,
 
   companionState: 'idle',

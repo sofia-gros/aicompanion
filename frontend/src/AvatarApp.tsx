@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Live2DCanvas } from './components/avatar/Live2DCanvas';
+import { VRMCanvas } from './components/avatar/VRMCanvas';
 import { Subtitle } from './components/avatar/Subtitle';
 import { AudioService } from './services/audioService';
 import { AvatarSpeakPayload } from './types/events';
@@ -8,7 +9,9 @@ import { AvatarSpeakPayload } from './types/events';
  * OBS Direct ブラウザソース専用の軽量アバター画面コンポーネント
  */
 export const AvatarApp: React.FC = () => {
-  const [subtitle, setSubtitle] = useState('');
+  const searchParams = new URLSearchParams(window.location.search);
+  const initialText = searchParams.get('text') || '';
+  const [subtitle, setSubtitle] = useState(initialText);
   const audioServiceRef = useRef<AudioService | null>(null);
 
   if (!audioServiceRef.current) {
@@ -59,18 +62,25 @@ export const AvatarApp: React.FC = () => {
     };
   }, []);
 
-  const searchParams = new URLSearchParams(window.location.search);
+  const typeQuery = searchParams.get('type') || 'live2d';
   const modelQuery = searchParams.get('model');
+
   let initialModel = '/live2d/models/Hiyori/Hiyori.model3.json';
   if (modelQuery === 'Mao') initialModel = '/live2d/models/Mao/Mao.model3.json';
   if (modelQuery === 'Haru') initialModel = '/live2d/models/Haru/Haru.model3.json';
 
-  const [modelPath, setModelPath] = useState(initialModel);
+  const vrmUrl = searchParams.get('vrm') || '/vrm/Seed-san.vrm';
+
+  const [modelPath] = useState(initialModel);
 
   return (
     <div className="relative w-screen h-screen overflow-hidden bg-transparent select-none pointer-events-none">
       <div className="w-full h-full pointer-events-auto">
-        <Live2DCanvas modelPath={modelPath} audioService={audioServiceRef.current!} />
+        {typeQuery === 'vrm' ? (
+          <VRMCanvas modelUrl={vrmUrl} audioService={audioServiceRef.current!} />
+        ) : (
+          <Live2DCanvas modelPath={modelPath} audioService={audioServiceRef.current!} />
+        )}
       </div>
       <Subtitle text={subtitle} />
     </div>

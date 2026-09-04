@@ -4,6 +4,32 @@ import { Live2DModel } from 'pixi-live2d-display/cubism4';
 import { Sparkles } from 'lucide-react';
 import { AudioService } from '../../services/audioService';
 
+// ヘッドレスブラウザや一部GPU環境でのシェーダーMAXユニット0例外を防止する安全ラッパー
+if (typeof window !== 'undefined' && !(window as any).__webgl_patched) {
+  (window as any).__webgl_patched = true;
+  const origGetContext = HTMLCanvasElement.prototype.getContext;
+  (HTMLCanvasElement.prototype as any).getContext = function (this: HTMLCanvasElement, ...args: any[]): any {
+    const ctx = origGetContext.apply(this, args as any);
+    const contextType = args[0];
+    if (ctx && (contextType === 'webgl' || contextType === 'webgl2' || contextType === 'experimental-webgl')) {
+      const gl = ctx as unknown as WebGLRenderingContext;
+      const origGetParam = gl.getParameter.bind(gl);
+      gl.getParameter = function (pname: number): any {
+        if (pname === gl.MAX_TEXTURE_IMAGE_UNITS) {
+          const val = origGetParam(pname);
+          return typeof val === 'number' && val > 0 ? val : 16;
+        }
+        if (pname === (gl as any).MAX_FRAGMENT_UNIFORM_VECTORS) {
+          const val = origGetParam(pname);
+          return typeof val === 'number' && val > 0 ? val : 16;
+        }
+        return origGetParam(pname);
+      };
+    }
+    return ctx;
+  };
+}
+
 interface Live2DCanvasProps {
   modelPath?: string;
   audioService: AudioService;
@@ -30,6 +56,7 @@ export const Live2DCanvas: React.FC<Live2DCanvasProps> = ({
   const modelRef = useRef<any>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isAppReady, setIsAppReady] = useState(false);
 
   // 感度パラメータをRefで保持し、不要な再レンダリング・破棄を防止
   const sensitivityRef = useRef(sensitivity);
@@ -44,8 +71,6 @@ export const Live2DCanvas: React.FC<Live2DCanvasProps> = ({
 
     try {
       (Live2DModel as any).registerTicker(PIXI.Ticker);
-      // ヘッドレスブラウザや一部GPU環境でのシェーダーMAXユニット0例外を防止
-      PIXI.settings.PREFER_ENV = PIXI.ENV.WEBGL_LEGACY;
     } catch {
       // 登録済み回避
     }
@@ -55,8 +80,10 @@ export const Live2DCanvas: React.FC<Live2DCanvasProps> = ({
       backgroundAlpha: 0,
       autoStart: true,
       resizeTo: canvasRef.current.parentElement || window,
+      antialias: true,
     });
     appRef.current = app;
+    setIsAppReady(true);
 
     // 毎フレームのリップシンクアニメーションループ
     const tickerCallback = () => {
@@ -84,17 +111,28 @@ export const Live2DCanvas: React.FC<Live2DCanvasProps> = ({
 
     return () => {
       window.removeEventListener('mousemove', handleMouseMove);
-      app.ticker.remove(tickerCallback);
-      // アンマウント時のみ解放
-      app.destroy(false, { children: true });
-      appRef.current = null;
+      if (appRef.current) {
+        try {
+          appRef.current.ticker?.remove(tickerCallback);
+          if (modelRef.current) {
+            appRef.current.stage?.removeChild(modelRef.current);
+            modelRef.current.destroy();
+            modelRef.current = null;
+          }
+          appRef.current.destroy(false, { children: true });
+        } catch {
+          // 解放例外安全吸収
+        }
+        appRef.current = null;
+      }
+      setIsAppReady(false);
     };
   }, []); // 依存配列は空！絶対に再実行しない
 
-  // 2. モデル変更時の差分ロード処理 (modelPath が変わった時のみ実行)
+  // 2. モデル変更時の差分ロード処理 (modelPath または isAppReady が変わった時に実行)
   useEffect(() => {
     const app = appRef.current;
-    if (!app || !modelPath) return;
+    if (!app || !modelPath || !isAppReady) return;
 
     let isCurrent = true;
 
@@ -112,24 +150,30 @@ export const Live2DCanvas: React.FC<Live2DCanvasProps> = ({
     setIsLoaded(false);
     setLoadError(null);
 
+    console.log('[Live2D] Loading model from path:', modelPath);
+
     // 新モデルのロード
     Live2DModel.from(modelPath, { autoInteract: false })
       .then((model: any) => {
+        console.log('[Live2D] Model loaded successfully! Raw width:', model.width, 'Raw height:', model.height, 'app.screen:', app.screen.width, app.screen.height);
         if (!isCurrent || !appRef.current) {
           model.destroy({ children: true });
           return;
         }
         modelRef.current = model;
 
-        // 配置とスケール計算
-        model.anchor.set(0.5, 0.5);
-        model.position.set(app.screen.width / 2, app.screen.height / 2 + 50);
-
+        // バストアップ表示のスケールと位置計算（胸から上が中央に大きく映るように最適化）
         const mWidth = model.width > 0 ? model.width : 2000;
         const mHeight = model.height > 0 ? model.height : 2000;
-        let scale = Math.min(app.screen.width / mWidth, app.screen.height / mHeight) * 0.85;
-        if (!isFinite(scale) || scale <= 0) scale = 0.25;
+
+        // 上半身（頭部〜胸）が画面高さの約80%を美しく占めるスケールを算出
+        let scale = app.screen.height / (mHeight * 0.42);
+        if (!isFinite(scale) || scale <= 0) scale = 0.22;
+
         model.scale.set(scale, scale);
+        model.anchor.set(0.5, 0.18); // 頭部〜首元を基準アンカーに設定
+        model.position.set(app.screen.width / 2, app.screen.height * 0.22);
+        console.log('[Live2D] Applied bust-up scale:', scale, 'position:', model.position.x, model.position.y);
 
         app.stage.addChild(model as any);
         setIsLoaded(true);
@@ -138,14 +182,14 @@ export const Live2DCanvas: React.FC<Live2DCanvasProps> = ({
       })
       .catch((err) => {
         if (!isCurrent) return;
-        console.warn('Live2Dモデルの読み込みに失敗しました:', err);
+        console.error('[Live2D Error] モデルの読み込みに失敗しました:', err);
         setLoadError(`モデルの読み込みに失敗しました (${modelPath})`);
       });
 
     return () => {
       isCurrent = false;
     };
-  }, [modelPath]);
+  }, [modelPath, isAppReady]);
 
   // 3. 感情・発話ステート変更時のモーション・表情自動トリガー
   useEffect(() => {
