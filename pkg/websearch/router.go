@@ -99,6 +99,67 @@ func (r *Router) DetermineLevel(userInput string) SearchIntent {
 	}
 }
 
+// DetermineIntent は設定（正規表現モードまたは超小型LLMモード）に応じてユーザー発話のレベルを判定します。
+func (r *Router) DetermineIntent(ctx context.Context, cfg SearchConfig, userInput string, logger ActionTraceLogger) SearchIntent {
+	if logger == nil {
+		logger = func(stage string, msg string) {}
+	}
+
+	// 超小型LLM判定モードが選択されており、モデル名が指定されている場合
+	if cfg.ClassifierMode == "llm" {
+		logger("思考", fmt.Sprintf("超小型LLM (%s) による発話レベルの文脈判定を実行中...", cfg.ClassifierModel))
+		prompt := fmt.Sprintf(
+			"ユーザー発話を次の4つのレベル（0〜3）のいずれかに分類し、数字1文字（0, 1, 2, 3）のみを出力してください。\n"+
+				"0: 日常会話、挨拶、雑談、感情表現（外部検索不要）\n"+
+				"1: 用語定義、歴史、確定事実、天気（Wikipediaや無料確定情報）\n"+
+				"2: 最新時事、ニュース速報、最新トレンド、検索依頼（Web検索API）\n"+
+				"3: WebサイトやURLの直接解析、スクレイピング\n\n"+
+				"ユーザー発話: %s\n"+
+				"判定結果（数字のみ）:",
+			userInput,
+		)
+
+		// ローカル推論サーバーまたはOpenAPI経由で超小型推論
+		if cfg.CloudAPIKey != "" {
+			answer, err := r.cloudLLM.Query(ctx, cfg.CloudAPIKey, cfg.CloudAPIBaseURL, cfg.CloudAPIModel, prompt)
+			if err == nil {
+				answer = strings.TrimSpace(answer)
+				if strings.Contains(answer, "1") {
+					return SearchIntent{
+						Level:       Level1FreeSearch,
+						Query:       r.analyzer.extractSearchQuery(userInput),
+						Reason:      "超小型LLMによる文脈判定: 用語・確定事実 (Level 1)",
+						FillerReply: "ちょっと調べてみるね！",
+					}
+				} else if strings.Contains(answer, "2") {
+					return SearchIntent{
+						Level:       Level2CloudAPI,
+						Query:       r.analyzer.extractSearchQuery(userInput),
+						Reason:      "超小型LLMによる文脈判定: 最新時事・Web検索 (Level 2)",
+						FillerReply: "最新の情報をネットで検索してみるよ〜！",
+					}
+				} else if strings.Contains(answer, "3") {
+					return SearchIntent{
+						Level:       Level3Scraping,
+						Query:       r.analyzer.extractSearchQuery(userInput),
+						Reason:      "超小型LLMによる文脈判定: スクレイピング (Level 3)",
+						FillerReply: "対象のページを直接確認してみるね！",
+					}
+				} else if strings.Contains(answer, "0") {
+					return SearchIntent{
+						Level:  Level0LLMOnly,
+						Reason: "超小型LLMによる文脈判定: 日常対話 (Level 0)",
+					}
+				}
+			}
+		}
+		logger("思考", "超小型LLM判定がタイムアウトまたは未起動のため、高速正規表現ルールへフォールバックします")
+	}
+
+	// デフォルト: 超高速正規表現ルール判定
+	return r.DetermineLevel(userInput)
+}
+
 // Dispatch は判定されたレベルと設定に応じて適切な情報取得を実行し、Gemini風の思考ログを段階的に送出します。
 func (r *Router) Dispatch(
 	ctx context.Context,
@@ -116,7 +177,7 @@ func (r *Router) Dispatch(
 	}
 
 	logger("思考", fmt.Sprintf("ユーザー発話を解析中... \"%s\"", userInput))
-	intent := r.DetermineLevel(userInput)
+	intent := r.DetermineIntent(ctx, cfg, userInput, logger)
 
 	switch intent.Level {
 	case Level0LLMOnly:

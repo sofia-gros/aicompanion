@@ -33,6 +33,8 @@ export const Toolbar: React.FC = () => {
     isServicesRunning,
     setServicesRunning,
     downloadedModels,
+    activeModelFileName,
+    switchActiveModel,
     systemSpec,
     addLog,
   } = useAppStore();
@@ -148,22 +150,33 @@ export const Toolbar: React.FC = () => {
           </div>
         </div>
 
-        {/* LLM Tier セレクター ＆ PCスペック自動推奨バッジ */}
+        {/* ダウンロード済みLLMモデル選択機能 ＆ PCスペック自動推奨バッジ */}
         <div className="flex items-center gap-1 pl-2 border-l border-zinc-700/60 shrink-0">
-          <span className="text-[11px] text-zinc-400 whitespace-nowrap">Tier:</span>
-          <div className="w-28 shrink-0">
-            <Select value={config.llmTier} onValueChange={handleTierChange}>
-              <SelectTrigger className="h-6 text-[11px] whitespace-nowrap">
-                <SelectValue placeholder="Tier選択" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="tier0_5b">0.5B (8GB)</SelectItem>
-                <SelectItem value="tier1_5b">1.5B (推奨)</SelectItem>
-                <SelectItem value="tier3b">3B (ミドル)</SelectItem>
-                <SelectItem value="tier7b">7B (高性能)</SelectItem>
-                <SelectItem value="cloud">クラウド API</SelectItem>
-              </SelectContent>
-            </Select>
+          <span className="text-[11px] text-zinc-400 whitespace-nowrap">モデル:</span>
+          <div className="w-36 shrink-0">
+            {downloadedModels.length > 0 ? (
+              <Select value={activeModelFileName || downloadedModels[0]} onValueChange={(model) => switchActiveModel(model)}>
+                <SelectTrigger className="h-6 text-[11px] whitespace-nowrap overflow-hidden">
+                  <SelectValue placeholder="モデル選択" />
+                </SelectTrigger>
+                <SelectContent>
+                  {downloadedModels.map((m) => (
+                    <SelectItem key={m} value={m} className="text-xs">
+                      {m.replace('.gguf', '')}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            ) : (
+              <button
+                onClick={() => setIsDownloaderOpen(true)}
+                className="h-6 px-2 text-[10px] text-zinc-400 hover:text-indigo-300 bg-zinc-950 border border-zinc-800 rounded flex items-center justify-between w-full transition-colors"
+                title="ローカルモデルが未ダウンロードです。クリックしてモデルを入手してください。"
+              >
+                <span>未ダウンロード</span>
+                <Download className="w-2.5 h-2.5 text-indigo-400 shrink-0" />
+              </button>
+            )}
           </div>
           {systemSpec && (
             <span

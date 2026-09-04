@@ -1,4 +1,4 @@
-import { AvatarSpeakPayload, DownloadProgressPayload, LLMTokenPayload, SearchConfig, SystemConfig } from '../types/events';
+import { AvatarSpeakPayload, DownloadProgressPayload, LLMTokenPayload, SearchConfig, SystemConfig, SystemUsage } from '../types/events';
 
 /**
  * Wails v2 Window オブジェクトの型定義
@@ -229,6 +229,34 @@ export class WailsBridge {
   }
 
   /**
+   * リアルタイムのPCリソース使用状況（CPU, RAM, ROM, GPU）を取得します。
+   */
+  public static async getSystemUsage(): Promise<SystemUsage> {
+    if (this.isWails() && (window.go?.main?.App as any)?.GetSystemUsage) {
+      return await (window.go?.main?.App as any).GetSystemUsage();
+    }
+    return {
+      cpuPercent: 0,
+      ramPercent: 0,
+      ramUsedGb: 0,
+      ramTotalGb: 0,
+      romPercent: 0,
+      romFreeGb: 0,
+      romTotalGb: 0,
+      gpuInfo: 'GPUアクセラレーション有効 (自動オフロード)',
+    };
+  }
+
+  /**
+   * 指定されたGGUFモデルに推論サーバーを切り替えます。
+   */
+  public static async switchModel(modelFileName: string): Promise<void> {
+    if (this.isWails() && (window.go?.main?.App as any)?.SwitchModel) {
+      await (window.go?.main?.App as any).SwitchModel(modelFileName);
+    }
+  }
+
+  /**
    * Web検索・情報解決設定を取得します。
    */
   public static async getSearchConfig(): Promise<SearchConfig> {
@@ -241,6 +269,8 @@ export class WailsBridge {
       cloudApiKey: '',
       cloudApiBaseUrl: 'https://api.openai.com/v1',
       cloudApiModel: 'gpt-4o-mini',
+      classifierMode: 'regex',
+      classifierModel: 'qwen2.5-0.5b-instruct-q4_k_m.gguf',
     };
   }
 
@@ -261,6 +291,7 @@ export class WailsBridge {
       onSpeak?: (payload: AvatarSpeakPayload) => void;
       onToken?: (payload: LLMTokenPayload) => void;
       onProgress?: (payload: DownloadProgressPayload) => void;
+      onDownloadedModelsUpdated?: (models: string[]) => void;
       onSystemLog?: (msg: string) => void;
       onSystemStatus?: (status: any) => void;
     }
@@ -277,6 +308,9 @@ export class WailsBridge {
     }
     if (handlers.onProgress) {
       window.runtime.EventsOn('download-progress', handlers.onProgress);
+    }
+    if (handlers.onDownloadedModelsUpdated) {
+      window.runtime.EventsOn('downloaded-models-updated', handlers.onDownloadedModelsUpdated);
     }
     if (handlers.onSystemLog) {
       window.runtime.EventsOn('system-log', handlers.onSystemLog);

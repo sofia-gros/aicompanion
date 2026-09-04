@@ -9,6 +9,10 @@ import {
   Trash2,
   Volume2,
   Sparkles,
+  Cpu,
+  HardDrive,
+  Database,
+  Gauge,
 } from 'lucide-react';
 import { Button } from '../ui/button';
 import { useAppStore, ChatMessage } from '../../stores/useAppStore';
@@ -36,6 +40,8 @@ export const BottomPanel: React.FC<BottomPanelProps> = ({ audioService }) => {
     firstAudioLatencyMs,
     fps,
     systemSpec,
+    systemUsage,
+    setSystemUsage,
     companionState,
     isMicListening,
     setIsMicListening,
@@ -44,6 +50,20 @@ export const BottomPanel: React.FC<BottomPanelProps> = ({ audioService }) => {
     clearChatMessages,
     addLog,
   } = useAppStore();
+
+  // パフォーマンス表示時の定期リソース取得 (2秒おき)
+  useEffect(() => {
+    if (activeTab !== 'perf') return;
+
+    const fetchUsage = () => {
+      WailsBridge.getSystemUsage().then((usage) => {
+        setSystemUsage(usage);
+      });
+    };
+    fetchUsage();
+    const timer = setInterval(fetchUsage, 2000);
+    return () => clearInterval(timer);
+  }, [activeTab]);
 
   const activeChar = characters.find((c) => c.id === activeCharacterId) || characters[0];
   const speechServiceRef = useRef<SpeechService | null>(null);
@@ -391,30 +411,113 @@ export const BottomPanel: React.FC<BottomPanelProps> = ({ audioService }) => {
           </div>
         )}
 
-        {/* ==================== 3. パフォーマンスメトリクス ==================== */}
+        {/* ==================== 3. パフォーマンスメトリクス & PC使用状況 ==================== */}
         {activeTab === 'perf' && (
-          <div className="flex-1 grid grid-cols-4 gap-2.5 p-2 font-mono text-xs">
-            <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-500">推論速度 (Tokens/sec)</span>
-              <span className="text-base font-bold text-indigo-400">
-                {tokensPerSec > 0 ? `${tokensPerSec.toFixed(1)} tok/s` : '待機中'}
-              </span>
-            </div>
-            <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-500">初声発話遅延 (First Latency)</span>
-              <span className="text-base font-bold text-emerald-400">
-                {firstAudioLatencyMs > 0 ? `${firstAudioLatencyMs} ms` : '未計測'}
-              </span>
-            </div>
-            <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-500">アバター描画 (FPS)</span>
-              <span className="text-base font-bold text-teal-400">{fps} FPS</span>
-            </div>
-            <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
-              <span className="text-[10px] text-zinc-500">PC環境 / 推奨モデル</span>
-              <span className="text-xs font-semibold text-amber-400 truncate">
-                {systemSpec ? `RAM ${systemSpec.totalRamGb}GB (${systemSpec.recommendedTier})` : '検知中...'}
-              </span>
+          <div className="flex-1 overflow-y-auto p-2">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 font-mono text-xs">
+              {/* 1. CPU使用率 */}
+              <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
+                <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                  <span className="flex items-center gap-1">
+                    <Cpu className="w-3 h-3 text-sky-400" />
+                    CPU使用率
+                  </span>
+                  <span className="font-semibold text-sky-400">
+                    {systemUsage ? `${systemUsage.cpuPercent.toFixed(1)}%` : '測定中...'}
+                  </span>
+                </div>
+                <div className="w-full bg-zinc-900 rounded-full h-1.5 mt-2 overflow-hidden">
+                  <div
+                    className="bg-sky-500 h-1.5 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.max(0, systemUsage?.cpuPercent || 0))}%` }}
+                  />
+                </div>
+              </div>
+
+              {/* 2. RAM使用状況 */}
+              <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
+                <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                  <span className="flex items-center gap-1">
+                    <Activity className="w-3 h-3 text-emerald-400" />
+                    RAM使用率
+                  </span>
+                  <span className="font-semibold text-emerald-400">
+                    {systemUsage ? `${systemUsage.ramPercent.toFixed(0)}%` : '測定中...'}
+                  </span>
+                </div>
+                <div className="w-full bg-zinc-900 rounded-full h-1.5 mt-1 overflow-hidden">
+                  <div
+                    className="bg-emerald-500 h-1.5 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.max(0, systemUsage?.ramPercent || 0))}%` }}
+                  />
+                </div>
+                <div className="text-[9px] text-zinc-500 mt-1 truncate">
+                  {systemUsage ? `${systemUsage.ramUsedGb.toFixed(1)} / ${systemUsage.ramTotalGb.toFixed(1)} GB` : ''}
+                </div>
+              </div>
+
+              {/* 3. ROM (ストレージ) 使用状況 */}
+              <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
+                <div className="flex items-center justify-between text-[10px] text-zinc-400">
+                  <span className="flex items-center gap-1">
+                    <HardDrive className="w-3 h-3 text-amber-400" />
+                    ROM (空き容量)
+                  </span>
+                  <span className="font-semibold text-amber-400">
+                    {systemUsage ? `${systemUsage.romFreeGb.toFixed(0)} GB` : '測定中...'}
+                  </span>
+                </div>
+                <div className="w-full bg-zinc-900 rounded-full h-1.5 mt-1 overflow-hidden">
+                  <div
+                    className="bg-amber-500 h-1.5 rounded-full transition-all duration-300"
+                    style={{ width: `${Math.min(100, Math.max(0, systemUsage?.romPercent || 0))}%` }}
+                  />
+                </div>
+                <div className="text-[9px] text-zinc-500 mt-1 truncate">
+                  {systemUsage ? `使用率 ${systemUsage.romPercent.toFixed(1)}% (総量 ${systemUsage.romTotalGb.toFixed(0)} GB)` : ''}
+                </div>
+              </div>
+
+              {/* 4. GPU / アクセラレータ */}
+              <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
+                <span className="text-[10px] text-zinc-400 flex items-center gap-1">
+                  <Gauge className="w-3 h-3 text-purple-400" />
+                  GPU / アクセラレータ
+                </span>
+                <span className="text-[11px] font-semibold text-purple-300 mt-1 truncate" title={systemUsage?.gpuInfo}>
+                  {systemUsage?.gpuInfo || 'GPU自動オフロード有効'}
+                </span>
+              </div>
+
+              {/* 5. 推論速度 */}
+              <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
+                <span className="text-[10px] text-zinc-500">推論速度 (Tokens/sec)</span>
+                <span className="text-sm font-bold text-indigo-400">
+                  {tokensPerSec > 0 ? `${tokensPerSec.toFixed(1)} tok/s` : '待機中'}
+                </span>
+              </div>
+
+              {/* 6. 初声発話遅延 */}
+              <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
+                <span className="text-[10px] text-zinc-500">初声発話遅延 (First Latency)</span>
+                <span className="text-sm font-bold text-emerald-400">
+                  {firstAudioLatencyMs > 0 ? `${firstAudioLatencyMs} ms` : '未計測'}
+                </span>
+              </div>
+
+              {/* 7. アバター描画 FPS */}
+              <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
+                <span className="text-[10px] text-zinc-500">アバター描画 (FPS)</span>
+                <span className="text-sm font-bold text-teal-400">{fps} FPS</span>
+              </div>
+
+              {/* 8. PC環境推奨モデル */}
+              <div className="bg-zinc-950 p-2.5 rounded border border-zinc-800 flex flex-col justify-between">
+                <span className="text-[10px] text-zinc-500">推奨スペック判定</span>
+                <span className="text-[11px] font-semibold text-amber-400 truncate" title={systemSpec?.recommendation}>
+                  {systemSpec ? `RAM ${systemSpec.totalRamGb}GB (${systemSpec.recommendedTier})` : '検知中...'}
+                </span>
+              </div>
             </div>
           </div>
         )}

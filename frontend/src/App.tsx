@@ -159,6 +159,10 @@ export const App: React.FC = () => {
           WailsBridge.getDownloadedModels().then((models) => setDownloadedModels(models));
         }
       },
+      onDownloadedModelsUpdated: (models) => {
+        setDownloadedModels(models);
+        addLog(`[Downloader] モデル一覧を更新しました: ${models.length}個のモデルが利用可能`);
+      },
       onSystemLog: (msg) => {
         addLog(msg);
       },

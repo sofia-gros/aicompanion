@@ -22,6 +22,8 @@ type SearchConfig struct {
 	CloudAPIKey     string `json:"cloudApiKey"`     // OpenAI互換 / Google Gemini APIキー
 	CloudAPIBaseURL string `json:"cloudApiBaseUrl"` // API Base URL (例: https://api.openai.com/v1)
 	CloudAPIModel   string `json:"cloudApiModel"`   // 使用モデル名 (例: gpt-4o-mini, gemini-2.0-flash)
+	ClassifierMode  string `json:"classifierMode"`  // レベル判定方式 ("regex": 高速正規表現, "llm": 超小型LLM推論)
+	ClassifierModel string `json:"classifierModel"` // 判定に使用する超小型モデル名 (例: qwen2.5-0.5b-instruct-q4_k_m.gguf)
 }
 
 // SearchResult は検索で得られた1件の情報を表します。

@@ -36,9 +36,17 @@ type TierManager struct {
 // NewTierManager はティアマネージャーを初期化します（デフォルトは8GB PC向け 1.5B）。
 func NewTierManager() *TierManager {
 	configs := map[LLMTier]TierConfig{
+		"smollm2_135m": {
+			Tier:        "smollm2_135m",
+			ModelName:   "SmolLM2-135M-Instruct (判定用超小型 90MB)",
+			FileName:    "smollm2-135m-instruct-q4_k_m.gguf",
+			ContextSize: 2048,
+			GPULayers:   99,
+			DownloadURL: "https://huggingface.co/bartowski/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q4_K_M.gguf",
+		},
 		Tier0_5B: {
 			Tier:        Tier0_5B,
-			ModelName:   "Qwen2.5-0.5B-Instruct (Q4_K_M)",
+			ModelName:   "Qwen2.5-0.5B-Instruct (Q4_K_M 398MB)",
 			FileName:    "qwen2.5-0.5b-instruct-q4_k_m.gguf",
 			ContextSize: 4096,
 			GPULayers:   99,

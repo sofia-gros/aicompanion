@@ -91,5 +91,32 @@ export interface SearchConfig {
   cloudApiBaseUrl: string;
   /** 使用モデル名 (例: gpt-4o-mini, gemini-2.0-flash) */
   cloudApiModel: string;
+  /** レベル判定方式 ("regex" | "llm") */
+  classifierMode: 'regex' | 'llm';
+  /** 判定用超小型モデル名 */
+  classifierModel: string;
 }
+
+/**
+ * PCのリアルタイムリソース使用状況（CPU, RAM, ROM/ディスク, GPU）
+ */
+export interface SystemUsage {
+  /** CPU使用率 (0.0〜100.0%) */
+  cpuPercent: number;
+  /** RAM使用率 (0.0〜100.0%) */
+  ramPercent: number;
+  /** 使用中RAM容量 (GB) */
+  ramUsedGb: number;
+  /** 搭載総RAM容量 (GB) */
+  ramTotalGb: number;
+  /** ストレージ使用率 (0.0〜100.0%) */
+  romPercent: number;
+  /** ストレージ空き容量 (GB) */
+  romFreeGb: number;
+  /** ストレージ総容量 (GB) */
+  romTotalGb: number;
+  /** GPU / VRAM情報またはアクセラレータ状況 */
+  gpuInfo: string;
+}
+
 

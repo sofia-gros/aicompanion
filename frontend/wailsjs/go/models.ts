@@ -47,6 +47,8 @@ export namespace main {
 	    cloudApiKey: string;
 	    cloudApiBaseUrl: string;
 	    cloudApiModel: string;
+	    classifierMode: string;
+	    classifierModel: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SystemConfig(source);
@@ -67,6 +69,8 @@ export namespace main {
 	        this.cloudApiKey = source["cloudApiKey"];
 	        this.cloudApiBaseUrl = source["cloudApiBaseUrl"];
 	        this.cloudApiModel = source["cloudApiModel"];
+	        this.classifierMode = source["classifierMode"];
+	        this.classifierModel = source["classifierModel"];
 	    }
 	}
 
@@ -92,6 +96,32 @@ export namespace platform {
 	        this.recommendation = source["recommendation"];
 	    }
 	}
+	export class SystemUsage {
+	    cpuPercent: number;
+	    ramPercent: number;
+	    ramUsedGb: number;
+	    ramTotalGb: number;
+	    romPercent: number;
+	    romFreeGb: number;
+	    romTotalGb: number;
+	    gpuInfo: string;
+	
+	    static createFrom(source: any = {}) {
+	        return new SystemUsage(source);
+	    }
+	
+	    constructor(source: any = {}) {
+	        if ('string' === typeof source) source = JSON.parse(source);
+	        this.cpuPercent = source["cpuPercent"];
+	        this.ramPercent = source["ramPercent"];
+	        this.ramUsedGb = source["ramUsedGb"];
+	        this.ramTotalGb = source["ramTotalGb"];
+	        this.romPercent = source["romPercent"];
+	        this.romFreeGb = source["romFreeGb"];
+	        this.romTotalGb = source["romTotalGb"];
+	        this.gpuInfo = source["gpuInfo"];
+	    }
+	}
 
 }
 
@@ -103,6 +133,8 @@ export namespace websearch {
 	    cloudApiKey: string;
 	    cloudApiBaseUrl: string;
 	    cloudApiModel: string;
+	    classifierMode: string;
+	    classifierModel: string;
 	
 	    static createFrom(source: any = {}) {
 	        return new SearchConfig(source);
@@ -115,6 +147,8 @@ export namespace websearch {
 	        this.cloudApiKey = source["cloudApiKey"];
 	        this.cloudApiBaseUrl = source["cloudApiBaseUrl"];
 	        this.cloudApiModel = source["cloudApiModel"];
+	        this.classifierMode = source["classifierMode"];
+	        this.classifierModel = source["classifierModel"];
 	    }
 	}
 

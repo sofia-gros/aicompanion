@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DownloadProgressPayload, SearchConfig, SystemConfig, SystemSpec } from '../types/events';
+import { DownloadProgressPayload, SearchConfig, SystemConfig, SystemSpec, SystemUsage } from '../types/events';
 import { CharacterProfile, DEFAULT_CHARACTERS } from '../types/character';
 import { WailsBridge } from '../services/wailsBridge';
 
@@ -46,7 +46,9 @@ interface AppState {
   // サービス稼働マスター状態
   isServicesRunning: boolean;
   downloadedModels: string[];
+  activeModelFileName: string;
   systemSpec: SystemSpec | null;
+  systemUsage: SystemUsage | null;
 
   // システム設定 & Web情報解決設定
   config: SystemConfig;
@@ -74,7 +76,9 @@ interface AppState {
   duplicateCharacter: (id: string) => void;
   setServicesRunning: (running: boolean) => void;
   setDownloadedModels: (models: string[]) => void;
+  switchActiveModel: (fileName: string) => void;
   setSystemSpec: (spec: SystemSpec) => void;
+  setSystemUsage: (usage: SystemUsage) => void;
   setFps: (fps: number) => void;
   setTokensPerSec: (tps: number) => void;
   setFirstAudioLatencyMs: (ms: number) => void;
@@ -126,7 +130,9 @@ export const useAppStore = create<AppState>((set, get) => ({
 
   isServicesRunning: true,
   downloadedModels: [],
+  activeModelFileName: '',
   systemSpec: null,
+  systemUsage: null,
 
   config: {
     displayMode: 'studio',
@@ -145,6 +151,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     cloudApiKey: '',
     cloudApiBaseUrl: 'https://api.openai.com/v1',
     cloudApiModel: 'gpt-4o-mini',
+    classifierMode: 'regex',
+    classifierModel: 'qwen2.5-0.5b-instruct-q4_k_m.gguf',
   },
 
   downloadProgress: null,
@@ -160,7 +168,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   logs: ['[System] AI Companion Studio 起動完了 (キャラクター: ひより)'],
 
   setServicesRunning: (running) => set({ isServicesRunning: running }),
-  setDownloadedModels: (models) => set({ downloadedModels: models }),
+  setDownloadedModels: (models) => {
+    set({ downloadedModels: models });
+    if (models.length > 0 && !get().activeModelFileName) {
+      set({ activeModelFileName: models[0] });
+    }
+  },
+  switchActiveModel: (fileName) => {
+    set({ activeModelFileName: fileName });
+    WailsBridge.switchModel(fileName);
+    get().addLog(`[推論] モデルを切り替えました: ${fileName}`);
+  },
+  setSystemUsage: (usage) => set({ systemUsage: usage }),
   setSystemSpec: (spec) => set({ systemSpec: spec }),
   setFps: (fps) => set({ fps }),
   setTokensPerSec: (tps) => set({ tokensPerSec: tps }),

@@ -19,6 +19,8 @@ export function GetSystemConfig():Promise<main.SystemConfig>;
 
 export function GetSystemSpec():Promise<platform.SystemSpec>;
 
+export function GetSystemUsage():Promise<platform.SystemUsage>;
+
 export function LaunchOverlayWindow():Promise<void>;
 
 export function SaveSearchConfig(arg1:websearch.SearchConfig):Promise<void>;
@@ -46,5 +48,7 @@ export function StartServices():Promise<void>;
 export function StopServices():Promise<void>;
 
 export function SwitchDisplayMode(arg1:string):Promise<void>;
+
+export function SwitchModel(arg1:string):Promise<void>;
 
 export function UpdateSystemConfig(arg1:main.SystemConfig):Promise<void>;

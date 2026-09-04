@@ -30,6 +30,10 @@ export function GetSystemSpec() {
   return window['go']['main']['App']['GetSystemSpec']();
 }
 
+export function GetSystemUsage() {
+  return window['go']['main']['App']['GetSystemUsage']();
+}
+
 export function LaunchOverlayWindow() {
   return window['go']['main']['App']['LaunchOverlayWindow']();
 }
@@ -84,6 +88,10 @@ export function StopServices() {
 
 export function SwitchDisplayMode(arg1) {
   return window['go']['main']['App']['SwitchDisplayMode'](arg1);
+}
+
+export function SwitchModel(arg1) {
+  return window['go']['main']['App']['SwitchModel'](arg1);
 }
 
 export function UpdateSystemConfig(arg1) {

@@ -41,6 +41,8 @@ type SystemConfig struct {
 	CloudAPIKey      string `json:"cloudApiKey"`      // OpenAI互換 / Gemini APIキー
 	CloudAPIBaseURL  string `json:"cloudApiBaseUrl"`  // Base URL
 	CloudAPIModel    string `json:"cloudApiModel"`    // モデル名
+	ClassifierMode   string `json:"classifierMode"`   // レベル判定方式 ("regex" | "llm")
+	ClassifierModel  string `json:"classifierModel"`  // 判定用超小型モデル名
 }
 
 // App はWailsアプリケーションのメインコントローラー構造体です。
@@ -363,7 +365,7 @@ func (a *App) SendMessage(text string) error {
 		var fillerReply string
 
 		if a.searchRouter != nil && searchCfg.Enabled {
-			intent := a.searchRouter.DetermineLevel(text)
+			intent := a.searchRouter.DetermineIntent(context.Background(), searchCfg, text, logger)
 			if intent.Level != websearch.Level0LLMOnly {
 				fillerReply = intent.FillerReply
 				// 先行相槌をTTSで発話（初声遅延ゼロ化）
@@ -442,6 +444,8 @@ func (a *App) GetSearchConfig() websearch.SearchConfig {
 		CloudAPIKey:     a.config.CloudAPIKey,
 		CloudAPIBaseURL: a.config.CloudAPIBaseURL,
 		CloudAPIModel:   a.config.CloudAPIModel,
+		ClassifierMode:  a.config.ClassifierMode,
+		ClassifierModel: a.config.ClassifierModel,
 	}
 }
 
@@ -455,6 +459,8 @@ func (a *App) SaveSearchConfig(cfg websearch.SearchConfig) error {
 	a.config.CloudAPIKey = cfg.CloudAPIKey
 	a.config.CloudAPIBaseURL = cfg.CloudAPIBaseURL
 	a.config.CloudAPIModel = cfg.CloudAPIModel
+	a.config.ClassifierMode = cfg.ClassifierMode
+	a.config.ClassifierModel = cfg.ClassifierModel
 
 	if a.ctx != nil {
 		runtime.EventsEmit(a.ctx, "system-log", "[設定] Web検索・API設定を更新しました")
@@ -676,6 +682,9 @@ func (a *App) StartModelDownload(modelKey string) error {
 					IsCompleted:      percent >= 100.0,
 				})
 				if percent >= 100.0 {
+					if a.ctx != nil {
+						runtime.EventsEmit(a.ctx, "downloaded-models-updated", a.GetDownloadedModels())
+					}
 					go a.ensureLLMServerWithModel(fileName)
 				}
 			},
@@ -683,6 +692,24 @@ func (a *App) StartModelDownload(modelKey string) error {
 	}()
 
 	return nil
+}
+
+// SwitchModel は指定されたGGUFモデルに推論サーバーを切り替えて起動します。
+func (a *App) SwitchModel(modelFileName string) error {
+	a.mutex.Lock()
+	a.config.LLMTier = "tier_custom"
+	a.mutex.Unlock()
+
+	go a.ensureLLMServerWithModel(modelFileName)
+	return nil
+}
+
+// GetSystemUsage はリアルタイムのCPU使用率、RAM使用量、ストレージ空き状況を取得します。
+func (a *App) GetSystemUsage() platform.SystemUsage {
+	a.mutex.RLock()
+	dir := a.modelDir
+	a.mutex.RUnlock()
+	return platform.GetSystemUsage(dir)
 }
 
 // CancelModelDownload は実行中のモデルダウンロードを中断します。
